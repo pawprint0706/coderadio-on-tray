@@ -4,14 +4,15 @@ import logging
 import os
 import signal
 import sys
+import threading
 import webbrowser
 
-from PySide6.QtCore import QObject, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QThread, QTimer, Signal, Slot
 from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 
 from coderadio_tray.config import OFFICIAL_SITE, load_config, save_config
 from coderadio_tray.metadata import MetadataClient, StationSnapshot, TrackInfo
-from coderadio_tray.player import MpvNotFoundError, MpvPlayer
+from coderadio_tray.player import MpvNotFoundError, PlayerWorker
 from coderadio_tray.ui import TrayController, TrayPopup
 from coderadio_tray.ui.icons import make_tray_icon
 
@@ -21,6 +22,10 @@ logger = logging.getLogger(__name__)
 class WorkerBridge(QObject):
     metadata_ready = Signal(object)
     metadata_failed = Signal(str)
+
+
+def _run_in_thread(target):
+    threading.Thread(target=target, daemon=True).start()
 
 
 class CodeRadioApp(QObject):
@@ -34,8 +39,18 @@ class CodeRadioApp(QObject):
         self._stream_url = ""
         self._error: str | None = None
         self._auto_started = False
+        self._reconnect_count = 0
+        self._reconnect_timer: QTimer | None = None
+        self._pending_bitrate: str | None = None
 
-        self._player = MpvPlayer(mpv_path=self._config.mpv_path, volume=self._config.volume)
+        self._player_thread = QThread(self)
+        self._player_worker = PlayerWorker(
+            mpv_path=self._config.mpv_path, volume=self._config.volume
+        )
+        self._player_worker.moveToThread(self._player_thread)
+        self._player_worker.state_changed.connect(self._on_player_state_changed)
+        self._player_worker.stream_ended.connect(self._on_stream_ended)
+        self._player_thread.start()
 
         self._bridge = WorkerBridge()
         self._bridge.metadata_ready.connect(self._on_metadata)
@@ -46,6 +61,7 @@ class CodeRadioApp(QObject):
         self._popup.set_bitrate(self._config.bitrate)
         self._popup.play_pause_clicked.connect(self.toggle_playback)
         self._popup.volume_changed.connect(self._on_volume)
+        self._popup.volume_released.connect(self._save_volume)
         self._popup.bitrate_changed.connect(self._on_bitrate)
         self._popup.open_site_clicked.connect(lambda: webbrowser.open(OFFICIAL_SITE))
         self._popup.quit_clicked.connect(self.quit)
@@ -68,24 +84,22 @@ class CodeRadioApp(QObject):
                 None,
                 "Code Radio Tray",
                 "The tray icon could not be shown.\n\n"
-                "Check Windows Settings → System → Notifications → "
+                "Check Windows Settings \u2192 System \u2192 Notifications \u2192 "
                 "Other system tray icons.\n\n"
                 "Press Ctrl+C in the console or close this dialog and use Task Manager "
                 "to end python.exe / mpv.exe.",
             )
 
     def refresh_metadata(self) -> None:
-        import threading
+        _run_in_thread(self._fetch_metadata)
 
-        def work() -> None:
-            try:
-                snap = self._client.fetch()
-                self._bridge.metadata_ready.emit(snap)
-            except Exception as exc:
-                logger.exception("metadata fetch failed")
-                self._bridge.metadata_failed.emit(str(exc))
-
-        threading.Thread(target=work, name="metadata-poll", daemon=True).start()
+    def _fetch_metadata(self) -> None:
+        try:
+            snap = self._client.fetch()
+            self._bridge.metadata_ready.emit(snap)
+        except Exception as exc:
+            logger.exception("metadata fetch failed")
+            self._bridge.metadata_failed.emit(str(exc))
 
     @Slot(object)
     def _on_metadata(self, snapshot: object) -> None:
@@ -95,7 +109,16 @@ class CodeRadioApp(QObject):
         self._stream_url = snapshot.stream_for_bitrate(self._config.bitrate)
         self._error = None if snapshot.is_online else "Station offline"
         self._update_ui()
-        if not self._auto_started and snapshot.is_online and self._stream_url:
+
+        if not snapshot.is_online:
+            if self._player_worker.is_playing() or self._player_worker.is_paused():
+                self._queue_player_cmd("stop")
+            return
+
+        if self._pending_bitrate:
+            self._apply_pending_bitrate()
+
+        if not self._auto_started and self._stream_url:
             self._auto_started = True
             self._start_playback()
 
@@ -104,15 +127,68 @@ class CodeRadioApp(QObject):
         self._error = message
         self._update_ui()
 
-    def toggle_playback(self) -> None:
-        try:
-            if self._player.is_playing():
-                self._player.pause()
-            elif getattr(self._player, "_playing", False) and getattr(self._player, "_paused", False):
-                self._player.resume()
+    @Slot()
+    def _on_player_state_changed(self) -> None:
+        self._update_ui()
+
+    @Slot()
+    def _on_stream_ended(self) -> None:
+        logger.info("stream ended, scheduling reconnect")
+        self._schedule_reconnect()
+
+    def _schedule_reconnect(self) -> None:
+        if self._reconnect_timer and self._reconnect_timer.isActive():
+            return
+        delay = min(2 ** self._reconnect_count, 30)
+        self._reconnect_count += 1
+        logger.info("reconnect in %ds (attempt %d)", delay, self._reconnect_count)
+        self._reconnect_timer = QTimer(self)
+        self._reconnect_timer.setSingleShot(True)
+        self._reconnect_timer.timeout.connect(self._do_reconnect)
+        self._reconnect_timer.start(delay * 1000)
+        self._error = f"Reconnecting in {delay}s..."
+        self._update_ui()
+
+    def _do_reconnect(self) -> None:
+        self._reconnect_timer = None
+        if self._stream_url:
+            self._start_playback()
+        else:
+            self.refresh_metadata()
+
+    def _queue_player_cmd(self, cmd: str, *args) -> None:
+        signal_map = {
+            "play": (self._player_worker.play_request, args[0] if args else ""),
+            "pause": (self._player_worker.pause_request, None),
+            "resume": (self._player_worker.resume_request, None),
+            "stop": (self._player_worker.stop_request, None),
+            "set_volume": (self._player_worker.set_volume_request, args[0] if args else 0),
+        }
+        entry = signal_map.get(cmd)
+        if entry:
+            sig, val = entry
+            if val is not None:
+                sig.emit(val)
             else:
+                sig.emit()
+
+    def toggle_playback(self) -> None:
+        if self._error and self._error.startswith("Reconnecting"):
+            return
+        try:
+            if self._player_worker.is_playing():
+                self._queue_player_cmd("pause")
+            elif self._player_worker.is_paused():
+                if self._pending_bitrate:
+                    self._pending_bitrate = None
+                    self._start_playback()
+                else:
+                    self._queue_player_cmd("resume")
+            elif self._stream_url:
                 self._start_playback()
-            self._error = None
+            else:
+                self._error = "No stream URL yet"
+                self.refresh_metadata()
         except Exception as exc:
             logger.exception("toggle failed")
             self._error = str(exc)
@@ -124,43 +200,53 @@ class CodeRadioApp(QObject):
             self.refresh_metadata()
             self._update_ui()
             return
-        try:
-            self._player.play(self._stream_url)
-            self._error = None
-        except Exception as exc:
-            logger.exception("playback failed")
-            self._error = str(exc)
+        self._error = None
+        self._reconnect_count = 0
+        self._queue_player_cmd("play", self._stream_url)
         self._update_ui()
 
     @Slot(int)
     def _on_volume(self, volume: int) -> None:
         self._config.volume = volume
-        self._player.set_volume(volume)
+        self._queue_player_cmd("set_volume", volume)
+
+    def _save_volume(self) -> None:
         save_config(self._config)
 
     @Slot(str)
     def _on_bitrate(self, bitrate: str) -> None:
         if bitrate == self._config.bitrate:
             return
-        was_playing = self._player.is_playing()
+        was_playing = self._player_worker.is_playing()
         self._config.bitrate = bitrate
-        save_config(self._config)
         if self._snapshot:
             self._stream_url = self._snapshot.stream_for_bitrate(bitrate)
         if was_playing and self._stream_url:
             self._start_playback()
+        elif self._stream_url:
+            self._pending_bitrate = bitrate
+            save_config(self._config)
+            self._update_ui()
         else:
             self._update_ui()
 
+    def _apply_pending_bitrate(self) -> None:
+        if not self._pending_bitrate or not self._snapshot:
+            return
+        self._stream_url = self._snapshot.stream_for_bitrate(self._pending_bitrate)
+        self._pending_bitrate = None
+        save_config(self._config)
+
     def _update_ui(self) -> None:
-        playing = self._player.is_playing()
+        playing = self._player_worker.is_playing()
+        paused = self._player_worker.is_paused()
         track = self._track.display
         self._popup.set_track_text(track)
         if self._error:
             status = f"Error: {self._error}"
         elif playing:
             status = "Playing"
-        elif getattr(self._player, "_paused", False):
+        elif paused:
             status = "Paused"
         else:
             status = "Stopped"
@@ -177,10 +263,10 @@ class CodeRadioApp(QObject):
         self._poll_timer.stop()
         self._popup.hide()
         self._tray.hide()
-        try:
-            self._player.shutdown()
-        except Exception:
-            logger.exception("player shutdown failed")
+        if self._player_thread.isRunning():
+            self._player_worker.shutdown()
+            self._player_thread.quit()
+            self._player_thread.wait(2000)
         try:
             self._client.close()
         except Exception:
@@ -190,11 +276,10 @@ class CodeRadioApp(QObject):
 
 def _install_sigint_handler(qt_app: QApplication, app: CodeRadioApp) -> None:
     signal.signal(signal.SIGINT, lambda *_: app.quit())
-    # Allow Python signal delivery while Qt event loop runs.
     timer = QTimer()
     timer.timeout.connect(lambda: None)
     timer.start(400)
-    qt_app._sigint_timer = timer  # type: ignore[attr-defined]
+    qt_app._sigint_timer = timer
 
 
 def run(*, hide_console: bool | None = None) -> int:
@@ -230,10 +315,9 @@ def run(*, hide_console: bool | None = None) -> int:
         QMessageBox.critical(None, "Code Radio Tray", str(exc))
         return 1
 
-    qt_app._coderadio_app = app  # type: ignore[attr-defined]
+    qt_app._coderadio_app = app
     _install_sigint_handler(qt_app, app)
 
-    # Windows: show tray only after the event loop has started.
     QTimer.singleShot(0, app.show_tray)
 
     if not hide_console:

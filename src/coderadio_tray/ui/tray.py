@@ -51,10 +51,7 @@ class TrayController:
     def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Context:
             self.popup.popup_at(QCursor.pos())
-        elif reason in {
-            QSystemTrayIcon.ActivationReason.Trigger,
-            QSystemTrayIcon.ActivationReason.DoubleClick,
-        }:
+        elif reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._left_click_handler()
 
     def on_left_click(self, handler) -> None:

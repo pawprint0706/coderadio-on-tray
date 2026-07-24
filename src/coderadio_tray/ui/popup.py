@@ -18,6 +18,7 @@ class TrayPopup(QWidget):
 
     play_pause_clicked = Signal()
     volume_changed = Signal(int)
+    volume_released = Signal()
     bitrate_changed = Signal(str)
     open_site_clicked = Signal()
     quit_clicked = Signal()
@@ -46,6 +47,7 @@ class TrayPopup(QWidget):
         self._volume.setRange(0, 100)
         self._volume.setValue(70)
         self._volume.valueChanged.connect(self.volume_changed.emit)
+        self._volume.sliderReleased.connect(self.volume_released.emit)
 
         self._vol_label = QLabel("70%")
         self._vol_label.setFixedWidth(36)
