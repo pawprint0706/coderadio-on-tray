@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtGui import QCursor
+from PySide6.QtGui import QCursor, QGuiApplication
 from PySide6.QtWidgets import QSystemTrayIcon
 
 from coderadio_tray.ui.icons import make_tray_icon
@@ -19,9 +19,15 @@ class TrayController:
         self.tray.activated.connect(self._on_activated)
         self._left_click_handler = lambda: None
         self._hint_shown = False
+        self._playing = False
+        self._error = False
+        QGuiApplication.styleHints().colorSchemeChanged.connect(self._on_theme_changed)
+
+    def _on_theme_changed(self, _scheme: object = None) -> None:
+        self.tray.setIcon(make_tray_icon(playing=self._playing, error=self._error))
 
     def show(self) -> None:
-        self.tray.setIcon(make_tray_icon(playing=False))
+        self.tray.setIcon(make_tray_icon(playing=self._playing, error=self._error))
         self.tray.show()
         if not self.tray.isVisible():
             logger.error("system tray icon is not visible after show()")
@@ -42,6 +48,8 @@ class TrayController:
         return self.tray.isVisible()
 
     def set_playing(self, playing: bool, *, error: bool = False) -> None:
+        self._playing = playing
+        self._error = error
         self.tray.setIcon(make_tray_icon(playing=playing, error=error))
         self.popup.set_playing(playing)
 
