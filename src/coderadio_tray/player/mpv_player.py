@@ -41,12 +41,16 @@ class _UnixSocketTransport(_IpcTransport):
         self._sock = socket.socket(socket.AF_UNIX)
         self._sock.settimeout(1.0)
         self._sock.connect(path)
+        self._sock.settimeout(0.05)
 
     def send(self, data: bytes) -> None:
         self._sock.sendall(data)
 
     def recv(self, n: int = 4096) -> bytes:
-        return self._sock.recv(n)
+        try:
+            return self._sock.recv(n)
+        except socket.timeout:
+            raise BlockingIOError("no data available") from None
 
     def close(self) -> None:
         try:
