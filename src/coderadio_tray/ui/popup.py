@@ -34,11 +34,11 @@ class TrayPopup(QWidget):
         self.setFixedWidth(300)
 
         self._track = QLabel("Code Radio")
+        self._track.setObjectName("track_label")
         self._track.setWordWrap(True)
-        self._track.setStyleSheet("font-size: 13px; font-weight: 600;")
 
         self._status = QLabel("Stopped")
-        self._status.setStyleSheet("color: #666; font-size: 11px;")
+        self._status.setObjectName("status_label")
 
         self._play_btn = QPushButton("Play")
         self._play_btn.clicked.connect(self.play_pause_clicked.emit)
@@ -122,6 +122,66 @@ class TrayPopup(QWidget):
         )
 
         self._volume.valueChanged.connect(lambda v: self._vol_label.setText(f"{v}%"))
+
+        self._apply_theme()
+        QGuiApplication.styleHints().colorSchemeChanged.connect(self._apply_theme)
+
+    def _apply_theme(self, _scheme: object = None) -> None:
+        dark = QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+        if dark:
+            bg, fg, border = "#1e1e1e", "#f0f0f0", "#3a3a3a"
+            btn_bg, btn_hover = "#2d2d2d", "#3a3a3a"
+            status_color = "#9aa0a6"
+            groove, accent = "#444", "#2F6FED"
+        else:
+            bg, fg, border = "#ffffff", "#1f2328", "#d0d7de"
+            btn_bg, btn_hover = "#f6f8fa", "#e9ecef"
+            status_color = "#57606a"
+            groove, accent = "#d0d7de", "#2F6FED"
+        sheet = """
+        TrayPopup {
+            background: __BG__;
+            color: __FG__;
+            border: 1px solid __BORDER__;
+            border-radius: 8px;
+        }
+        QLabel { color: __FG__; }
+        #track_label { font-size: 13px; font-weight: 600; }
+        #status_label { color: __STATUS__; font-size: 11px; }
+        QPushButton {
+            background: __BTN__;
+            color: __FG__;
+            border: 1px solid __BORDER__;
+            border-radius: 4px;
+            padding: 6px 10px;
+        }
+        QPushButton:hover { background: __BTNHOVER__; }
+        QComboBox {
+            background: __BTN__;
+            color: __FG__;
+            border: 1px solid __BORDER__;
+            border-radius: 4px;
+            padding: 4px 8px;
+        }
+        QSlider::groove:horizontal {
+            height: 4px;
+            background: __GROOVE__;
+            border-radius: 2px;
+        }
+        QSlider::handle:horizontal {
+            width: 12px;
+            margin: -5px 0;
+            background: __ACCENT__;
+            border-radius: 6px;
+        }
+        """
+        for key, val in {
+            "__BG__": bg, "__FG__": fg, "__BORDER__": border,
+            "__BTN__": btn_bg, "__BTNHOVER__": btn_hover,
+            "__STATUS__": status_color, "__GROOVE__": groove, "__ACCENT__": accent,
+        }.items():
+            sheet = sheet.replace(key, val)
+        self.setStyleSheet(sheet)
 
     def _on_bitrate(self, _index: int) -> None:
         self.bitrate_changed.emit(str(self._bitrate.currentData()))
