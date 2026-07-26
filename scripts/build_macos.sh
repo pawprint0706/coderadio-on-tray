@@ -5,6 +5,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+BUILD_STARTED=$SECONDS
 
 PYTHON="${ROOT}/.venv/bin/python"
 if [[ ! -x "$PYTHON" ]]; then
@@ -13,7 +14,7 @@ if [[ ! -x "$PYTHON" ]]; then
   PYTHON="${ROOT}/.venv/bin/python"
 fi
 
-echo "Installing package + PyInstaller + macOS extras ..."
+echo "[1/5] Installing package + PyInstaller + macOS extras ..."
 "$PYTHON" -m pip install -q -e ".[dev,macos]"
 
 MPV_SRC="${ROOT}/.tools/mpv/extract/mpv"
@@ -43,7 +44,7 @@ if ! command -v dylibbundler >/dev/null 2>&1; then
   fi
 fi
 
-echo "Ensuring app.icns from campfire iconset ..."
+echo "[2/5] Generating app icons ..."
 ICONS_DIR="${ROOT}/src/coderadio_tray/resources/icons"
 "$PYTHON" scripts/generate_icons.py
 if command -v iconutil >/dev/null 2>&1; then
@@ -52,11 +53,12 @@ else
   echo "iconutil missing; PyInstaller .app may lack a custom Dock/Finder icon." >&2
 fi
 
-echo "Running PyInstaller ..."
+echo "[3/5] Running PyInstaller (this is the longest step) ..."
 "$PYTHON" -m PyInstaller --noconfirm --clean packaging/coderadio_tray.spec
 
 bundle_mpv() {
   local dest="$1"
+  local dylib_log="${ROOT}/build/dylibbundler.log"
   mkdir -p "${dest}/mpv"
   cp "$MPV_SRC" "${dest}/mpv/mpv"
   chmod +x "${dest}/mpv/mpv"
@@ -64,11 +66,16 @@ bundle_mpv() {
   # Collect mpv's non-system dylibs into .../mpv/libs and rewrite its load
   # commands to @executable_path/libs/. Ignored locations (/usr/lib,
   # /System/Library) exist on every Mac and are left absolute.
-  dylibbundler -od -b -of -ns \
-    -x "${dest}/mpv/mpv" \
-    -d "${dest}/mpv/libs" \
-    -p "@executable_path/libs/" \
-    -i /usr/lib -i /System/Library
+  echo "[4/5] Bundling mpv dylibs (about 47 libraries; please wait) ..."
+  if ! dylibbundler -od -b -of -ns \
+      -x "${dest}/mpv/mpv" \
+      -d "${dest}/mpv/libs" \
+      -p "@executable_path/libs/" \
+      -i /usr/lib -i /System/Library >"$dylib_log" 2>&1; then
+    echo "mpv dylib bundling failed:" >&2
+    cat "$dylib_log" >&2
+    return 1
+  fi
 
   # dylibbundler can add @executable_path/libs/ twice (from multiple source
   # rpaths); a duplicate LC_RPATH aborts the process under dyld on launch.
@@ -93,22 +100,44 @@ if [[ -d "$APP_DIR" ]]; then
       || /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$PLIST"
   fi
   codesign --force --deep -s - "$APP_DIR" 2>/dev/null || true
-  echo "Build OK: $APP_DIR"
+  echo "App bundle OK: $APP_DIR"
 
   # Wrap the .app into a compressed DMG with an /Applications symlink so the
   # release artifact is a single file users can drag-and-drop install.
+  echo "[5/5] Creating compressed DMG ..."
   VERSION=$("$PYTHON" -c "from coderadio_tray import __version__; print(__version__)")
   DMG="${ROOT}/dist/CodeRadioTray-${VERSION}-macos.dmg"
-  STAGING="$(mktemp -d)"
+  DMG_WORK="$(mktemp -d)"
+  STAGING="${DMG_WORK}/staging"
+  RW_DMG="${DMG_WORK}/CodeRadioTray-rw.dmg"
+  DMG_LOG="${DMG_WORK}/hdiutil.log"
+  cleanup_dmg() {
+    rm -rf "$DMG_WORK"
+  }
+  trap cleanup_dmg EXIT
+
+  mkdir -p "$STAGING"
   cp -R "$APP_DIR" "$STAGING/"
   ln -s /Applications "$STAGING/Applications"
-SIZE_K=$(/usr/bin/du -sk "$STAGING" | awk '{print int($1*1.1+1024)}')
-    rm -f /tmp/coderadio-rw.dmg
-    hdiutil create -srcfolder "$STAGING" -volname CodeRadioTray -fs HFS+ \
-      -size "${SIZE_K}k" -ov /tmp/coderadio-rw.dmg >/dev/null 2>&1
-  hdiutil convert /tmp/coderadio-rw.dmg -format UDZO -imagekey zlib-level=9 \
-    -o "$DMG" >/dev/null 2>&1
-  rm -rf "$STAGING" /tmp/coderadio-rw.dmg
+  SIZE_K=$(/usr/bin/du -sk "$STAGING" | awk '{print int($1*1.1+1024)}')
+
+  if ! hdiutil create -srcfolder "$STAGING" -volname CodeRadioTray -fs HFS+ \
+      -size "${SIZE_K}k" -ov "$RW_DMG" >"$DMG_LOG" 2>&1; then
+    echo "DMG create failed:" >&2
+    cat "$DMG_LOG" >&2
+    exit 1
+  fi
+
+  rm -f "$DMG"
+  if ! hdiutil convert "$RW_DMG" -format UDZO -imagekey zlib-level=9 \
+      -ov -o "$DMG" >"$DMG_LOG" 2>&1; then
+    echo "DMG convert failed:" >&2
+    cat "$DMG_LOG" >&2
+    exit 1
+  fi
+
+  cleanup_dmg
+  trap - EXIT
   echo "DMG OK: $DMG"
 elif [[ -d "$ONEDIR" ]]; then
   bundle_mpv "$ONEDIR"
@@ -120,3 +149,4 @@ else
 fi
 
 du -sh dist/CodeRadioTray* 2>/dev/null || true
+echo "Completed in $((SECONDS - BUILD_STARTED)) seconds."
