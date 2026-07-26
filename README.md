@@ -99,7 +99,12 @@ Build machine also needs [Inno Setup](https://jrsoftware.org/isinfo.php) (`winge
 - 시작 메뉴 바로가기 + 선택적 바탕화면 아이콘
 - 설정(`%APPDATA%\coderadio-on-tray`)은 제거해도 남음
 
-**Unsigned** 빌드는 SmartScreen 경고가 날 수 있습니다 — “More info → Run anyway”.
+**Unsigned** 빌드는 SmartScreen 경고가 날 수 있습니다 — “More info → Run anyway”.  
+코드 서명은 계획하지 않습니다. 다운로드 후 [GitHub Releases](https://github.com/pawprint0706/coderadio-on-tray/releases)의 **SHA256**으로 무결성을 확인하세요.
+
+```powershell
+Get-FileHash .\CodeRadioTray-0.3.0-win64-setup.exe -Algorithm SHA256
+```
 
 ### macOS
 
@@ -108,7 +113,12 @@ chmod +x scripts/build_macos.sh
 ./scripts/build_macos.sh
 ```
 
-Output under `dist/` (`.app` when PyInstaller emits a bundle). Dock icon is suppressed (`LSUIElement` + runtime Accessory policy). Gatekeeper may block unsigned apps: right-click → Open, or `xattr -dr com.apple.quarantine …`.
+Output under `dist/` (`.app` when PyInstaller emits a bundle). Dock icon is suppressed (`LSUIElement` + runtime Accessory policy). Gatekeeper may block unsigned apps: right-click → Open, or `xattr -dr com.apple.quarantine …`.  
+코드 서명/공증은 계획하지 않습니다 — Release의 SHA256으로 검증하세요.
+
+```bash
+shasum -a 256 CodeRadioTray-0.3.0-macos.dmg
+```
 
 > Homebrew `mpv` may pull shared libraries — for a truly portable Mac build, prefer a relocatable/static mpv binary under `.tools/mpv/extract/mpv` and verify with `otool -L` on a clean machine.
 

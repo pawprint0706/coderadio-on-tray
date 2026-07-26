@@ -87,7 +87,7 @@ macOS:    build_macos.command / scripts/build_macos.sh → .dmg
 | 등급 | 내용 |
 |------|------|
 | Medium | 절전/Wi‑Fi 전환 장시간 매트릭스 미문서화 |
-| Medium | 코드 서명 없음 → SmartScreen / Gatekeeper 경고 가능 |
+| Info | 코드 서명 포기 — SmartScreen/Gatekeeper 경고 가능. **SHA256으로 무결성 확인** (`v0.3.0` Release / `SHA256SUMS`) |
 | Low | 볼륨 곡선(`^0.75`) 주관적 |
 | Info | 자동 재생·autostart 설정 토글 없음 |
 
@@ -97,7 +97,9 @@ macOS:    build_macos.command / scripts/build_macos.sh → .dmg
 
 실행 순서 (보류 전 남은 선택 항목):
 
-**절전/네트워크 매트릭스 문서화 → (선택) 서명 → P2/P3는 지시 대기**
+**절전/네트워크 매트릭스 문서화 → P2/P3는 지시 대기**
+
+(코드 서명은 포기. 릴리스 SHA256 + CI `ruff format --check`로 대체.)
 
 ### 진행함 / 닫음
 - Windows 클린 설치·실행 검증 (Inno) ✅  
