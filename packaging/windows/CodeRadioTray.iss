@@ -28,6 +28,7 @@ OutputBaseFilename=CodeRadioTray-{#MyAppVersion}-win64-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\..\src\coderadio_tray\resources\icons\app.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

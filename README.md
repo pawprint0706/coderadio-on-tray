@@ -14,12 +14,16 @@ Unofficial [freeCodeCamp Code Radio](https://coderadio.freecodecamp.org/) player
 
 - Python 3.11+
 - [mpv](https://mpv.io/) on `PATH`, or under `.tools/mpv/extract/`
-- Windows / macOS primarily tested; Linux is best-effort (DE tray differences possible)
+- Windows / macOS primarily tested; Linux is best-effort (see [Linux](#linux-best-effort) below)
 
 ```bash
 # Windows example
 winget install shinchiro.mpv
 ```
+
+Tray and app icons use an original **campfire** silhouette inspired by the freeCodeCamp
+motif (unofficial homage — not their trademark asset). The same artwork ships in the
+Windows installer wizard, `.exe`, and (on Mac builds) `.icns` / Finder icon.
 
 ## Run (development)
 
@@ -99,12 +103,27 @@ Build machine also needs [Inno Setup](https://jrsoftware.org/isinfo.php) (`winge
 - 시작 메뉴 바로가기 + 선택적 바탕화면 아이콘
 - 설정(`%APPDATA%\coderadio-on-tray`)은 제거해도 남음
 
-**Unsigned** 빌드는 SmartScreen 경고가 날 수 있습니다 — “More info → Run anyway”.  
-코드 서명은 계획하지 않습니다. 다운로드 후 [GitHub Releases](https://github.com/pawprint0706/coderadio-on-tray/releases)의 **SHA256**으로 무결성을 확인하세요.
+#### Windows SmartScreen / “Unknown publisher”
+
+Builds are **not code-signed** (no certificate planned). Windows Defender SmartScreen or
+Edge/Chrome download warnings are expected for a new/unsigned publisher.
+
+**If the installer is blocked:**
+
+1. Prefer the asset from [GitHub Releases](https://github.com/pawprint0706/coderadio-on-tray/releases) only.
+2. Verify integrity against the release `SHA256SUMS-*.txt` (or the hash listed in release notes):
 
 ```powershell
 Get-FileHash .\CodeRadioTray-0.3.0-win64-setup.exe -Algorithm SHA256
 ```
+
+3. When SmartScreen shows **Windows protected your PC**:
+   - Click **More info**
+   - Click **Run anyway**
+4. Browser “download is not commonly downloaded” / “keep anyway”: use **Keep** / **Keep anyway**, then run the `.exe` and follow step 3 if SmartScreen appears again.
+5. If your org policy blocks unsigned installers entirely, use a machine where you can approve the prompt, or run from source (`pip install -e .`).
+
+After install, the Start Menu / desktop shortcut and tray use the campfire app icon.
 
 ### macOS
 
@@ -113,14 +132,39 @@ chmod +x scripts/build_macos.sh
 ./scripts/build_macos.sh
 ```
 
-Output under `dist/` (`.app` when PyInstaller emits a bundle). Dock icon is suppressed (`LSUIElement` + runtime Accessory policy). Gatekeeper may block unsigned apps: right-click → Open, or `xattr -dr com.apple.quarantine …`.  
-코드 서명/공증은 계획하지 않습니다 — Release의 SHA256으로 검증하세요.
+Output under `dist/` (`.app` / DMG). Dock icon is suppressed (`LSUIElement` + runtime Accessory policy); Finder still shows the campfire `.icns` when built with `iconutil`.
+
+#### macOS Gatekeeper / quarantine
+
+Builds are **not signed or notarized**. First open after download from the web often hits Gatekeeper.
+
+**If macOS says the app can’t be opened / was blocked:**
+
+1. Download only from [GitHub Releases](https://github.com/pawprint0706/coderadio-on-tray/releases).
+2. Verify SHA256:
 
 ```bash
 shasum -a 256 CodeRadioTray-0.3.0-macos.dmg
 ```
 
+3. **Preferred UI path:** in Finder, **Control-click** (right-click) the app → **Open** → confirm **Open** in the dialog. Do this once; later launches are remembered for that user.
+4. Or clear quarantine after you trust the SHA256 match:
+
+```bash
+# DMG mount path or Applications copy — adjust the path
+xattr -dr com.apple.quarantine "/Applications/Code Radio Tray.app"
+```
+
+5. System Settings → Privacy & Security may show an **Open Anyway** button shortly after a blocked launch — use that if Control-click Open is unavailable.
+6. Corporate MDM that forbids unsigned apps: run from source with `pip install -e ".[macos]"` instead.
+
 > Homebrew `mpv` may pull shared libraries — for a truly portable Mac build, prefer a relocatable/static mpv binary under `.tools/mpv/extract/mpv` and verify with `otool -L` on a clean machine.
+
+### Linux (best-effort)
+
+No packaged Linux binary in v0.3.x. Primary QA remains Windows + macOS. For source install,
+DE caveats, and a concrete **Ubuntu smoke checklist**, see
+[`docs/linux-best-effort.md`](docs/linux-best-effort.md).
 
 ### Smoke checklist (clean PC / Mac)
 
@@ -143,6 +187,7 @@ pytest
 ## Docs
 
 - `docs/considerations.md` — design decisions
+- `docs/linux-best-effort.md` — Linux caveats + Ubuntu smoke procedure
 - `docs/review-v0.1.md` / `docs/review-v0.2.md` / `docs/review-v0.3.md` — implementation reviews
 - `docs/smoke-sleep-network.md` — sleep / network reconnect smoke checklist (results blank until filled)
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from coderadio_tray.ui.icons import make_tray_icon
+from coderadio_tray.ui.icons import make_app_icon, make_tray_icon
 
 
 def _platform_ink(monkeypatch, *, is_mask):
@@ -38,3 +38,10 @@ def test_tray_icon_error_state_renders(monkeypatch, qapp):
     # Should not raise and should produce a non-null pixmap at a usable size.
     pm = icon.pixmap(32)
     assert not pm.isNull()
+
+
+def test_app_icon_campfire_renders(qapp):
+    icon = make_app_icon()
+    pm = icon.pixmap(256)
+    assert not pm.isNull()
+    assert len(icon.availableSizes()) >= 4

@@ -7,6 +7,8 @@ from pathlib import Path
 SPECDIR = Path(SPECPATH).resolve()
 ROOT = SPECDIR.parent
 SRC = ROOT / "src"
+ICON_ICO = SRC / "coderadio_tray" / "resources" / "icons" / "app.ico"
+ICON_ICNS = SRC / "coderadio_tray" / "resources" / "icons" / "app.icns"
 
 # Do NOT collect_all(PySide6) — that pulls WebEngine/3D/Charts (~700MB+).
 # Hooks for QtCore/Gui/Widgets/Network follow from imports in the app.
@@ -97,6 +99,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(ICON_ICO) if ICON_ICO.is_file() else None,
 )
 
 coll = COLLECT(
@@ -114,7 +117,7 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name="CodeRadioTray.app",
-        icon=None,
+        icon=str(ICON_ICNS) if ICON_ICNS.is_file() else None,
         bundle_identifier="org.coderadio-on-tray.app",
         info_plist={
             "CFBundleName": "Code Radio Tray",

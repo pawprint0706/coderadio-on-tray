@@ -63,6 +63,9 @@ if (-not (Test-Path $MpvSrc)) {
     throw "mpv.exe missing. Place it at .tools\mpv\extract\mpv.exe or run scripts\fetch_mpv_windows.ps1"
 }
 
+Write-Host "Ensuring Windows app.ico ..."
+& $VenvPython (Join-Path $Root "scripts\generate_icons.py")
+
 $Spec = Join-Path $Root "packaging\coderadio_tray.spec"
 Write-Host "Running PyInstaller ..."
 & $VenvPython -m PyInstaller --noconfirm --clean $Spec

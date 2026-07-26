@@ -137,7 +137,7 @@ OS마다 “트레이” 의미가 다르다.
 | 런타임 테스트 | **제한적** — 여러 DE를 직접 설치·검증하는 것은 기대하지 않음 |
 | 지원 등급 | Windows / macOS = 주력 검증, Linux = **best-effort (커뮤니티·CI 보조)** |
 | DE 매트릭스 | GNOME/KDE/XFCE/… 전부 QA 약속하지 않음. 이슈 제보 시 수정 우선순위만 둠 |
-| 문서 | README에 “Linux는 best-effort, DE별 트레이 차이 가능”을 명시 |
+| 문서 | README + [`docs/linux-best-effort.md`](linux-best-effort.md) (Ubuntu 스모크 절차 포함) |
 
 실무적 완화:
 

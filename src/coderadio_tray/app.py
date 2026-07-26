@@ -15,7 +15,7 @@ from coderadio_tray.metadata import MetadataClient, StationSnapshot, TrackInfo
 from coderadio_tray.player import MpvNotFoundError, PlayerWorker
 from coderadio_tray.single_instance import try_acquire as try_acquire_single_instance
 from coderadio_tray.ui import TrayController, TrayPopup
-from coderadio_tray.ui.icons import make_tray_icon
+from coderadio_tray.ui.icons import make_app_icon, make_tray_icon
 
 logger = logging.getLogger(__name__)
 
@@ -348,7 +348,7 @@ def run(*, hide_console: bool | None = None) -> int:
     qt_app.setApplicationName("Code Radio Tray")
     qt_app.setOrganizationName("coderadio-on-tray")
     qt_app.setApplicationDisplayName("Code Radio Tray")
-    qt_app.setWindowIcon(make_tray_icon(playing=False))
+    qt_app.setWindowIcon(make_app_icon())
 
     if not QSystemTrayIcon.isSystemTrayAvailable():
         QMessageBox.critical(

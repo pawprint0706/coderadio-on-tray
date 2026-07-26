@@ -43,6 +43,15 @@ if ! command -v dylibbundler >/dev/null 2>&1; then
   fi
 fi
 
+echo "Ensuring app.icns from campfire iconset ..."
+ICONS_DIR="${ROOT}/src/coderadio_tray/resources/icons"
+"$PYTHON" scripts/generate_icons.py
+if command -v iconutil >/dev/null 2>&1; then
+  iconutil -c icns "${ICONS_DIR}/app.iconset" -o "${ICONS_DIR}/app.icns"
+else
+  echo "iconutil missing; PyInstaller .app may lack a custom Dock/Finder icon." >&2
+fi
+
 echo "Running PyInstaller ..."
 "$PYTHON" -m PyInstaller --noconfirm --clean packaging/coderadio_tray.spec
 
