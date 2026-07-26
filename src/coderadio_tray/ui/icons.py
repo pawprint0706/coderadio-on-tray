@@ -11,6 +11,13 @@ from PySide6.QtGui import QColor, QGuiApplication, QIcon, QImage, QPainter, QPix
 
 TRAY_ICON_SIZES = (16, 18, 20, 22, 24, 32, 44, 48, 64)
 
+# macOS/Linux keep a wide rectangular glyph (menu-bar friendly). Windows
+# notification area is square, so a wide pixmap is letterboxed and looks small.
+# On Windows we draw into a square and scale with mild horizontal compression
+# (no side crop) so the paused brackets-only mark stays intact.
+_WIN_TRAY_HEIGHT_FILL = 0.92
+_DEFAULT_TRAY_HEIGHT_FILL = 0.98
+
 
 def resources_icons_dir() -> Path:
     return Path(__file__).resolve().parent.parent / "resources" / "icons"
@@ -82,15 +89,43 @@ def _logo_image(*, brackets_only: bool, ink: QColor | None) -> QImage:
     return image
 
 
+def _tray_render_params() -> tuple[bool, float]:
+    """Return ``(square_canvas, height_fill)`` for the current platform."""
+    if sys.platform == "win32":
+        return True, _WIN_TRAY_HEIGHT_FILL
+    return False, _DEFAULT_TRAY_HEIGHT_FILL
+
+
 def _render_logo_pixmap(
     size: int,
     *,
     brackets_only: bool = False,
     ink: QColor | None = None,
     rectangular: bool = False,
+    square: bool = False,
+    height_fill: float = _DEFAULT_TRAY_HEIGHT_FILL,
 ) -> QPixmap:
     source = QPixmap.fromImage(_logo_image(brackets_only=brackets_only, ink=ink))
-    target_height = max(1, round(size * 0.98))
+    target_height = max(1, round(size * height_fill))
+
+    if square:
+        # Square slot: fill most of the height and the full width. The FCC mark
+        # is wider than tall, so this applies mild horizontal compression instead
+        # of cropping — needed so paused (brackets-only) stays recognizable.
+        scaled = source.scaled(
+            size,
+            target_height,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        canvas = QPixmap(size, size)
+        canvas.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(canvas)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.drawPixmap(0, (size - scaled.height()) // 2, scaled)
+        painter.end()
+        return canvas
+
     scaled = source.scaledToHeight(
         target_height,
         Qt.TransformationMode.SmoothTransformation,
@@ -103,6 +138,7 @@ def _render_logo_pixmap(
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
+        canvas_width = size
 
     canvas = QPixmap(canvas_width, size)
     canvas.fill(Qt.GlobalColor.transparent)
@@ -119,8 +155,15 @@ def _render_logo_pixmap(
 
 
 def _render_tray_pixmap(size: int, *, playing: bool, error: bool, ink: QColor) -> QPixmap:
+    square, height_fill = _tray_render_params()
     if error:
-        pixmap = _render_logo_pixmap(size, ink=QColor("#e53935"), rectangular=True)
+        pixmap = _render_logo_pixmap(
+            size,
+            ink=QColor("#e53935"),
+            rectangular=not square,
+            square=square,
+            height_fill=height_fill,
+        )
         painter = QPainter(pixmap)
         font = painter.font()
         font.setBold(True)
@@ -133,7 +176,14 @@ def _render_tray_pixmap(size: int, *, playing: bool, error: bool, ink: QColor) -
 
     # Playing shows the supplied logo unchanged. Paused/stopped removes only
     # the center campfire, leaving the original left/right bracket silhouettes.
-    return _render_logo_pixmap(size, brackets_only=not playing, ink=ink, rectangular=True)
+    return _render_logo_pixmap(
+        size,
+        brackets_only=not playing,
+        ink=ink,
+        rectangular=not square,
+        square=square,
+        height_fill=height_fill,
+    )
 
 
 def _render_app_pixmap(size: int) -> QPixmap:

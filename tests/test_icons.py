@@ -38,7 +38,41 @@ def test_tray_icon_has_standard_sizes(monkeypatch, qapp):
     sizes = icon.availableSizes()
     assert len(sizes) > 0
     assert {size.height() for size in sizes} == set(TRAY_ICON_SIZES)
-    assert all(size.width() > size.height() for size in sizes)
+    if icons.sys.platform == "win32":
+        assert all(size.width() == size.height() for size in sizes)
+    else:
+        assert all(size.width() > size.height() for size in sizes)
+
+
+def test_windows_tray_icon_is_square_and_taller_fill(monkeypatch, qapp):
+    monkeypatch.setattr(icons.sys, "platform", "win32")
+    pixmap = _render_tray_pixmap(32, playing=True, error=False, ink=QColor("#ffffff"))
+    assert pixmap.width() == 32
+    assert pixmap.height() == 32
+    image = pixmap.toImage()
+    top_band = sum(
+        image.pixelColor(x, y).alpha()
+        for y in range(max(1, 32 // 10))
+        for x in range(32)
+    )
+    assert top_band > 0
+    # Paused must keep full brackets (compression, not side-crop).
+    paused = _render_tray_pixmap(64, playing=False, error=False, ink=QColor("#ffffff"))
+    pimg = paused.toImage()
+    left_ink = sum(
+        1
+        for y in range(pimg.height())
+        for x in range(pimg.width() // 5)
+        if pimg.pixelColor(x, y).alpha() > 10
+    )
+    assert left_ink > 50
+
+
+def test_non_windows_tray_icon_stays_rectangular(monkeypatch, qapp):
+    monkeypatch.setattr(icons.sys, "platform", "darwin")
+    pixmap = _render_tray_pixmap(32, playing=True, error=False, ink=QColor("#ffffff"))
+    assert pixmap.width() > pixmap.height()
+
 
 
 def test_tray_icon_error_state_renders(monkeypatch, qapp):
