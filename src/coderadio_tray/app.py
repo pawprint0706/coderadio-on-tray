@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 from coderadio_tray.config import OFFICIAL_SITE, load_config, save_config
 from coderadio_tray.metadata import MetadataClient, StationSnapshot, TrackInfo
 from coderadio_tray.player import MpvNotFoundError, PlayerWorker
+from coderadio_tray.single_instance import try_acquire as try_acquire_single_instance
 from coderadio_tray.ui import TrayController, TrayPopup
 from coderadio_tray.ui.icons import make_tray_icon
 
@@ -333,6 +334,18 @@ def run(*, hide_console: bool | None = None) -> int:
 
     qt_app = QApplication(sys.argv)
     qt_app.setQuitOnLastWindowClosed(False)
+
+    instance_lock = try_acquire_single_instance()
+    if instance_lock is None:
+        QMessageBox.information(
+            None,
+            "Code Radio Tray",
+            "Code Radio Tray is already running.\n\n"
+            "Look for the icon in the system tray / menu bar.",
+        )
+        return 0
+    qt_app._single_instance_lock = instance_lock
+
     if sys.platform == "darwin":
         _hide_dock_icon()
     qt_app.setApplicationName("Code Radio Tray")

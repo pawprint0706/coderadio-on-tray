@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import os
 import sys
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
+
+from coderadio_tray import __version__
 
 APP_NAME = "coderadio-on-tray"
 NOWPLAYING_URL = "https://coderadio-admin-v2.freecodecamp.org/api/nowplaying/coderadio"
 OFFICIAL_SITE = "https://coderadio.freecodecamp.org/"
-USER_AGENT = f"{APP_NAME}/0.1.0 (+unofficial; {OFFICIAL_SITE})"
+USER_AGENT = f"{APP_NAME}/{__version__} (+unofficial; {OFFICIAL_SITE})"
 DEFAULT_POLL_SECONDS = 15
 
 

@@ -148,20 +148,18 @@ class MpvPlayer:
 
     @staticmethod
     def _resolve_mpv(mpv_path: str) -> str:
-        candidates: list[str] = []
-        if mpv_path:
-            candidates.append(mpv_path)
-        here = Path(__file__).resolve()
-        repo_tools = here.parents[3] / ".tools" / "mpv" / "extract" / ("mpv.exe" if sys.platform == "win32" else "mpv")
-        candidates.append(str(repo_tools))
-        for candidate in candidates:
-            if candidate and Path(candidate).is_file():
-                return str(Path(candidate))
+        from coderadio_tray.paths import iter_mpv_candidates
+
+        for candidate in iter_mpv_candidates(mpv_path):
+            if candidate.is_file():
+                return str(candidate)
         found = shutil.which(mpv_path) or shutil.which("mpv.exe") or shutil.which("mpv")
         if not found:
             raise MpvNotFoundError(
-                "mpv was not found on PATH. Install mpv for development "
-                "(e.g. winget install shinchiro.mpv) or set config mpv_path."
+                "mpv was not found. For releases it should be bundled next to the "
+                "app as mpv/mpv(.exe). For development, install mpv on PATH "
+                "(e.g. winget install shinchiro.mpv), place it under "
+                ".tools/mpv/extract/, or set config mpv_path."
             )
         return found
 

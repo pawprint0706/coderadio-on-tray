@@ -8,6 +8,7 @@ build/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-*.spec
 .DS_Store
 Thumbs.db
+# Allow committed packaging specs; ignore ad-hoc root specs
+/*.spec
