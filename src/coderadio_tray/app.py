@@ -144,7 +144,7 @@ class CodeRadioApp(QObject):
     def _schedule_reconnect(self) -> None:
         if self._reconnect_timer and self._reconnect_timer.isActive():
             return
-        delay = min(2 ** self._reconnect_count, 30)
+        delay = min(2**self._reconnect_count, 30)
         self._reconnect_count += 1
         logger.info("reconnect in %ds (attempt %d)", delay, self._reconnect_count)
         self._reconnect_timer = QTimer(self)
@@ -310,9 +310,7 @@ def _hide_dock_icon() -> None:
     except ImportError:
         logger.debug("pyobjc unavailable; running with a Dock icon")
         return
-    NSApplication.sharedApplication().setActivationPolicy_(
-        NSApplicationActivationPolicyAccessory
-    )
+    NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
 
 
 def run(*, hide_console: bool | None = None) -> int:
@@ -353,7 +351,9 @@ def run(*, hide_console: bool | None = None) -> int:
     qt_app.setWindowIcon(make_tray_icon(playing=False))
 
     if not QSystemTrayIcon.isSystemTrayAvailable():
-        QMessageBox.critical(None, "Code Radio Tray", "System tray is not available on this desktop.")
+        QMessageBox.critical(
+            None, "Code Radio Tray", "System tray is not available on this desktop."
+        )
         return 1
 
     try:

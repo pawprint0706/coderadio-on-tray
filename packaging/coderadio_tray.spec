@@ -119,7 +119,7 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleName": "Code Radio Tray",
             "CFBundleDisplayName": "Code Radio Tray",
-            "CFBundleShortVersionString": "0.2.0",
+            "CFBundleShortVersionString": "0.3.0",
             "NSHighResolutionCapable": True,
             "LSUIElement": True,
         },

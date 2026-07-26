@@ -85,9 +85,7 @@ class _WinPipeTransport(_IpcTransport):
 
     def recv(self, n: int = 4096) -> bytes:
         available = ctypes.c_ulong(0)
-        ok = self._peek(
-            self._handle, None, 0, None, ctypes.byref(available), None
-        )
+        ok = self._peek(self._handle, None, 0, None, ctypes.byref(available), None)
         if not ok or available.value == 0:
             raise BlockingIOError("no data available")
         to_read = min(n, available.value)

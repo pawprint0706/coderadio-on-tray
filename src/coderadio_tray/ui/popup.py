@@ -178,9 +178,14 @@ class TrayPopup(QWidget):
         }
         """
         for key, val in {
-            "__BG__": bg, "__FG__": fg, "__BORDER__": border,
-            "__BTN__": btn_bg, "__BTNHOVER__": btn_hover,
-            "__STATUS__": status_color, "__GROOVE__": groove, "__HANDLE__": handle,
+            "__BG__": bg,
+            "__FG__": fg,
+            "__BORDER__": border,
+            "__BTN__": btn_bg,
+            "__BTNHOVER__": btn_hover,
+            "__STATUS__": status_color,
+            "__GROOVE__": groove,
+            "__HANDLE__": handle,
         }.items():
             sheet = sheet.replace(key, val)
         self.setStyleSheet(sheet)

@@ -6,7 +6,7 @@ Unofficial [freeCodeCamp Code Radio](https://coderadio.freecodecamp.org/) player
 
 | | |
 |--|--|
-| Version | 0.2.0 |
+| Version | 0.3.0 |
 | Platforms | Windows / macOS (primary), Linux best-effort |
 | Stack | Python 3.11+, PySide6, mpv (JSON IPC) |
 
@@ -82,16 +82,24 @@ build_windows.bat
 powershell -ExecutionPolicy Bypass -File scripts\build_windows.ps1
 ```
 
-Needs `.tools\mpv\extract\mpv.exe` (or the script runs `scripts\fetch_mpv_windows.ps1`).
-Output: `dist\CodeRadioTray\`
+Needs `.tools\mpv\extract\mpv.exe` (or the script runs `scripts\fetch_mpv_windows.ps1`).  
+Build machine also needs [Inno Setup](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup` — the script installs it if missing).
 
-| Path | Role |
-|------|------|
-| `CodeRadioTray.exe` | App (windowed) |
-| `mpv\mpv.exe` | Bundled player |
-| `_internal\` | Python / Qt runtime |
+| Output | Role |
+|--------|------|
+| `dist\CodeRadioTray-*-win64-setup.exe` | **배포용** 설치 마법사 (권장) |
+| `dist\CodeRadioTray\` | 포터블 onedir (개발/디버그) |
 
-Zip that folder for distribution (~240 MB including bundled mpv). **Unsigned** builds may trigger SmartScreen — “More info → Run anyway”, or prefer hashes from GitHub Releases.
+설치 마법사는 **관리자 권한 없이** 사용자 폴더에 설치합니다:
+
+`%LOCALAPPDATA%\Programs\CodeRadioTray`  
+(예: `C:\Users\<you>\AppData\Local\Programs\CodeRadioTray`)
+
+- Program Files에 넣지 않음 (UAC 불필요)
+- 시작 메뉴 바로가기 + 선택적 바탕화면 아이콘
+- 설정(`%APPDATA%\coderadio-on-tray`)은 제거해도 남음
+
+**Unsigned** 빌드는 SmartScreen 경고가 날 수 있습니다 — “More info → Run anyway”.
 
 ### macOS
 
@@ -107,10 +115,13 @@ Output under `dist/` (`.app` when PyInstaller emits a bundle). Dock icon is supp
 ### Smoke checklist (clean PC / Mac)
 
 1. No Python / no system mpv on PATH.
-2. Launch the release binary once — tray icon appears, stream plays.
-3. Second launch shows “already running” and exits.
-4. Switch 128 ↔ 64 kbps without reconnect loops.
-5. Quit from the popup; no leftover `mpv` / app process.
+2. **Windows:** run `CodeRadioTray-*-win64-setup.exe` → install under `%LOCALAPPDATA%\Programs\CodeRadioTray` (no admin).  
+   **macOS:** open the DMG → drag to Applications (or run from the volume).
+3. Launch once — tray/menu-bar icon appears, stream plays.
+4. Second launch shows “already running” and exits.
+5. Switch 128 ↔ 64 kbps without reconnect loops.
+6. Quit from the popup; no leftover `mpv` / app process.
+7. **Windows:** uninstall from Settings → Apps (per-user entry).
 
 ## Tests
 
