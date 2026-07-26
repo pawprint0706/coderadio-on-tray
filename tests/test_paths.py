@@ -9,13 +9,14 @@ from coderadio_tray import paths
 def test_iter_mpv_candidates_non_frozen(monkeypatch, tmp_path):
     monkeypatch.delattr(sys, "frozen", raising=False)
     monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+    name = paths.mpv_binary_name()
     cands = paths.iter_mpv_candidates("mpv")
     assert cands, "expected at least one candidate"
     base = Path(__file__).resolve().parents[1]
     # Non-frozen build looks next to the repo root and in .tools/mpv/extract.
-    assert (base / "mpv" / "mpv") in cands
-    assert (base / "mpv") in cands
-    assert (base / ".tools" / "mpv" / "extract" / "mpv") in cands
+    assert (base / "mpv" / name) in cands
+    assert (base / name) in cands
+    assert (base / ".tools" / "mpv" / "extract" / name) in cands
     # No MEIPASS-derived paths when not frozen.
     assert not any("MEIPASS" in str(c) or "_MEIPASS" in str(c) for c in cands)
 
@@ -36,11 +37,12 @@ def test_iter_mpv_candidates_frozen(monkeypatch, tmp_path):
     monkeypatch.setattr(sys, "executable", str(exe_dir / "CodeRadioTray"), raising=False)
     monkeypatch.setattr(sys, "_MEIPASS", str(meipass), raising=False)
 
+    name = paths.mpv_binary_name()
     cands = paths.iter_mpv_candidates("mpv")
-    assert (exe_dir / "mpv" / "mpv") in cands
-    assert (exe_dir / "mpv") in cands
-    assert (meipass / "mpv" / "mpv") in cands
-    assert (meipass / "mpv") in cands
+    assert (exe_dir / "mpv" / name) in cands
+    assert (exe_dir / name) in cands
+    assert (meipass / "mpv" / name) in cands
+    assert (meipass / name) in cands
     # Frozen builds must not probe the dev-only .tools path.
     assert not any(".tools" in str(c) for c in cands)
 
