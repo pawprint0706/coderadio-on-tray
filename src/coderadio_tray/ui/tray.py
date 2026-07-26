@@ -82,7 +82,7 @@ class TrayController(QObject):
         # on the macOS menu bar drifts with the pixel the user happened to hit.
         geo = self.tray.geometry()
         if geo.isValid() and not geo.isNull():
-            return QPoint(geo.center().x(), geo.bottom())
+            return QPoint(geo.center().x(), geo.y() + geo.height())
         return QCursor.pos()
 
     def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:

@@ -218,13 +218,16 @@ class TrayPopup(QWidget):
             self.activateWindow()
             return
         geo = screen.availableGeometry()
-        w, h = self.sizeHint().width(), self.sizeHint().height()
-        x = min(max(global_pos.x() - w // 2, geo.left() + 8), geo.right() - w - 8)
-        y = global_pos.y() - h - 12
-        if y < geo.top() + 8:
-            y = global_pos.y() + 12
-        if y + h > geo.bottom() - 8:
-            y = geo.bottom() - h - 8
+        w, h = self.width(), self.height()
+        gap = 10
+        x = min(max(global_pos.x() - w // 2, geo.left()), geo.left() + geo.width() - w)
+        y = global_pos.y() - h - gap
+        if y < geo.top():
+            y = global_pos.y() + gap
+        if y + h > geo.top() + geo.height():
+            y = geo.top() + geo.height() - h
+        if y < geo.top():
+            y = geo.top()
         self.move(x, y)
         self.show()
         self.raise_()
