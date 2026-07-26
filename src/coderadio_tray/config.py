@@ -35,12 +35,14 @@ class AppConfig:
     bitrate: str = "128"  # "128" or "64"
     poll_seconds: int = DEFAULT_POLL_SECONDS
     mpv_path: str = "mpv"
+    first_run_hint_shown: bool = False
 
     def clamp(self) -> AppConfig:
         self.volume = max(0, min(100, int(self.volume)))
         if self.bitrate not in {"128", "64"}:
             self.bitrate = "128"
         self.poll_seconds = max(5, min(120, int(self.poll_seconds)))
+        self.first_run_hint_shown = bool(self.first_run_hint_shown)
         return self
 
 

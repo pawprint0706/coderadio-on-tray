@@ -14,14 +14,15 @@ logger = logging.getLogger(__name__)
 
 
 class TrayController(QObject):
-    def __init__(self, popup: TrayPopup) -> None:
+    def __init__(self, popup: TrayPopup, *, first_run: bool = False, on_hint_shown=None) -> None:
         super().__init__()
         self.popup = popup
         self.tray = QSystemTrayIcon(make_tray_icon(playing=False), self)
         self.tray.setToolTip("Code Radio")
         self.tray.activated.connect(self._on_activated)
         self._left_click_handler = lambda: None
-        self._hint_shown = False
+        self._hint_shown = not first_run
+        self._on_hint_shown = on_hint_shown
         self._playing = False
         self._error = False
 
@@ -60,6 +61,8 @@ class TrayController(QObject):
                 QSystemTrayIcon.MessageIcon.Information,
                 5000,
             )
+            if self._on_hint_shown is not None:
+                self._on_hint_shown()
 
     def hide(self) -> None:
         self.tray.hide()

@@ -66,7 +66,11 @@ class CodeRadioApp(QObject):
         self._popup.open_site_clicked.connect(lambda: webbrowser.open(OFFICIAL_SITE))
         self._popup.quit_clicked.connect(self.quit)
 
-        self._tray = TrayController(self._popup)
+        self._tray = TrayController(
+            self._popup,
+            first_run=not self._config.first_run_hint_shown,
+            on_hint_shown=self._mark_hint_shown,
+        )
         self._tray.on_left_click(self.toggle_playback)
 
         self._poll_timer = QTimer(self)
@@ -280,6 +284,10 @@ class CodeRadioApp(QObject):
         except Exception:
             logger.exception("client close failed")
         self._qt_app.quit()
+
+    def _mark_hint_shown(self) -> None:
+        self._config.first_run_hint_shown = True
+        save_config(self._config)
 
 
 def _install_sigint_handler(qt_app: QApplication, app: CodeRadioApp) -> None:
