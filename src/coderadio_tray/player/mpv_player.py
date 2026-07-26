@@ -104,6 +104,19 @@ class _WinPipeTransport(_IpcTransport):
         return self._fp.fileno()
 
 
+def ui_volume_to_mpv(ui: int) -> float:
+    """Map slider 0–100 (approx. perceived loudness) to mpv amplitude volume.
+
+    mpv's ``volume`` is roughly linear in amplitude. A linear UI→mpv map
+    makes mid values feel a bit quiet, so apply a mild power curve
+    (exponent 0.75; UI 50 → ~60) rather than a full square-root boost.
+    """
+    t = max(0, min(100, int(ui))) / 100.0
+    if t <= 0:
+        return 0.0
+    return round(100.0 * (t**0.75), 2)
+
+
 class MpvPlayer:
     def __init__(self, mpv_path: str = "mpv", volume: int = 70) -> None:
         self._mpv_path = self._resolve_mpv(mpv_path)
@@ -129,6 +142,9 @@ class MpvPlayer:
 
     def set_event_callback(self, callback) -> None:
         self._event_callback = callback
+
+    def _mpv_volume(self) -> float:
+        return ui_volume_to_mpv(self._volume)
 
     @staticmethod
     def _resolve_mpv(mpv_path: str) -> str:
@@ -175,7 +191,7 @@ class MpvPlayer:
                 "--no-terminal",
                 "--input-media-keys=no",
                 f"--title=Code Radio Tray",
-                f"--volume={self._volume}",
+                f"--volume={self._mpv_volume()}",
                 f"--input-ipc-server={self._ipc_path}",
                 "--msg-level=all=error",
             ]
@@ -280,11 +296,15 @@ class MpvPlayer:
     def _handle_event(self, msg: dict) -> None:
         event = msg.get("event", "")
         if event == "end-file":
-            with self._state_lock:
-                self._playing = False
-                self._paused = False
-                self._current_url = ""
-            logger.info("mpv reported end-file")
+            reason = str(msg.get("reason") or "unknown")
+            logger.info("mpv reported end-file reason=%s", reason)
+            # loadfile replace / stop / quit end the previous file intentionally.
+            # Clearing state here races with play() and falsely looks like a drop.
+            if reason not in {"stop", "quit", "redirect"}:
+                with self._state_lock:
+                    self._playing = False
+                    self._paused = False
+                    self._current_url = ""
         elif event == "file-loaded":
             with self._state_lock:
                 self._playing = True
@@ -322,7 +342,7 @@ class MpvPlayer:
             self.start_idle()
             self._command("loadfile", url, "replace")
             self._command("set_property", "pause", False)
-            self._command("set_property", "volume", self._volume)
+            self._command("set_property", "volume", self._mpv_volume())
             self._current_url = url
         with self._state_lock:
             self._playing = True
@@ -373,7 +393,7 @@ class MpvPlayer:
         with self._cmd_lock:
             if self._proc and self._proc.poll() is None and self._transport is not None:
                 try:
-                    self._command("set_property", "volume", self._volume)
+                    self._command("set_property", "volume", self._mpv_volume())
                 except Exception:
                     logger.exception("set_volume failed")
 

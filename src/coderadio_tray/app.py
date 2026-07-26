@@ -149,6 +149,12 @@ class CodeRadioApp(QObject):
         self._error = f"Reconnecting in {delay}s..."
         self._update_ui()
 
+    def _cancel_reconnect(self) -> None:
+        if self._reconnect_timer is not None:
+            self._reconnect_timer.stop()
+            self._reconnect_timer = None
+        self._reconnect_count = 0
+
     def _do_reconnect(self) -> None:
         self._reconnect_timer = None
         if self._stream_url:
@@ -200,8 +206,8 @@ class CodeRadioApp(QObject):
             self.refresh_metadata()
             self._update_ui()
             return
+        self._cancel_reconnect()
         self._error = None
-        self._reconnect_count = 0
         self._queue_player_cmd("play", self._stream_url)
         self._update_ui()
 
@@ -217,15 +223,17 @@ class CodeRadioApp(QObject):
     def _on_bitrate(self, bitrate: str) -> None:
         if bitrate == self._config.bitrate:
             return
-        was_playing = self._player_worker.is_playing()
+        was_playing = self._player_worker.is_playing() or self._player_worker.is_paused()
         self._config.bitrate = bitrate
         if self._snapshot:
             self._stream_url = self._snapshot.stream_for_bitrate(bitrate)
+        save_config(self._config)
         if was_playing and self._stream_url:
+            # Paused bitrate switch: load the new URL instead of resume-old.
+            self._pending_bitrate = None
             self._start_playback()
         elif self._stream_url:
             self._pending_bitrate = bitrate
-            save_config(self._config)
             self._update_ui()
         else:
             self._update_ui()

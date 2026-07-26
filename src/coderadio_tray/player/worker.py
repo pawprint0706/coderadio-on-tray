@@ -32,8 +32,16 @@ class PlayerWorker(QObject):
         self.shutdown_request.connect(self._on_shutdown)
 
     def _on_mpv_event(self, event: str, msg: dict) -> None:
-        if event == "end-file":
-            self.stream_ended.emit()
+        if event != "end-file":
+            return
+        reason = str(msg.get("reason") or "unknown")
+        # Bitrate switches use loadfile replace, which ends the previous file
+        # with reason "stop". Reconnecting on that creates an interrupt loop.
+        if reason in {"stop", "quit", "redirect"}:
+            logger.info("ignoring intentional end-file (%s)", reason)
+            return
+        logger.info("unexpected end-file (%s), requesting reconnect", reason)
+        self.stream_ended.emit()
 
     @Slot(str)
     def _on_play(self, url: str) -> None:

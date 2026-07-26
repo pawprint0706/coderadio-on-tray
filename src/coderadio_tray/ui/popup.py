@@ -115,7 +115,7 @@ class TrayPopup(QWidget):
             QSlider::handle:horizontal {
                 width: 12px;
                 margin: -5px 0;
-                background: #2F6FED;
+                background: #ffffff;
                 border-radius: 6px;
             }
             """
@@ -132,12 +132,12 @@ class TrayPopup(QWidget):
             bg, fg, border = "#1e1e1e", "#f0f0f0", "#3a3a3a"
             btn_bg, btn_hover = "#2d2d2d", "#3a3a3a"
             status_color = "#9aa0a6"
-            groove, accent = "#444", "#2F6FED"
+            groove, handle = "#444", "#ffffff"
         else:
             bg, fg, border = "#ffffff", "#1f2328", "#d0d7de"
             btn_bg, btn_hover = "#f6f8fa", "#e9ecef"
             status_color = "#57606a"
-            groove, accent = "#d0d7de", "#2F6FED"
+            groove, handle = "#d0d7de", "#1f2328"
         sheet = """
         TrayPopup {
             background: __BG__;
@@ -171,14 +171,14 @@ class TrayPopup(QWidget):
         QSlider::handle:horizontal {
             width: 12px;
             margin: -5px 0;
-            background: __ACCENT__;
+            background: __HANDLE__;
             border-radius: 6px;
         }
         """
         for key, val in {
             "__BG__": bg, "__FG__": fg, "__BORDER__": border,
             "__BTN__": btn_bg, "__BTNHOVER__": btn_hover,
-            "__STATUS__": status_color, "__GROOVE__": groove, "__ACCENT__": accent,
+            "__STATUS__": status_color, "__GROOVE__": groove, "__HANDLE__": handle,
         }.items():
             sheet = sheet.replace(key, val)
         self.setStyleSheet(sheet)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QTimer
 from PySide6.QtGui import QCursor, QGuiApplication
 from PySide6.QtWidgets import QSystemTrayIcon
 
@@ -13,10 +13,11 @@ from coderadio_tray.ui.popup import TrayPopup
 logger = logging.getLogger(__name__)
 
 
-class TrayController:
+class TrayController(QObject):
     def __init__(self, popup: TrayPopup) -> None:
+        super().__init__()
         self.popup = popup
-        self.tray = QSystemTrayIcon(make_tray_icon(playing=False))
+        self.tray = QSystemTrayIcon(make_tray_icon(playing=False), self)
         self.tray.setToolTip("Code Radio")
         self.tray.activated.connect(self._on_activated)
         self._left_click_handler = lambda: None
