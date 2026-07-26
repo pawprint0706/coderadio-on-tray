@@ -102,9 +102,10 @@ if [[ -d "$APP_DIR" ]]; then
   STAGING="$(mktemp -d)"
   cp -R "$APP_DIR" "$STAGING/"
   ln -s /Applications "$STAGING/Applications"
-  SIZE_K=$(/usr/bin/du -sk "$STAGING" | awk '{print int($1*1.1+1024)}')
-  hdiutil create -srcfolder "$STAGING" -volname CodeRadioTray -fs HFS+ \
-    -size "${SIZE_K}k" /tmp/coderadio-rw.dmg >/dev/null 2>&1
+SIZE_K=$(/usr/bin/du -sk "$STAGING" | awk '{print int($1*1.1+1024)}')
+    rm -f /tmp/coderadio-rw.dmg
+    hdiutil create -srcfolder "$STAGING" -volname CodeRadioTray -fs HFS+ \
+      -size "${SIZE_K}k" -ov /tmp/coderadio-rw.dmg >/dev/null 2>&1
   hdiutil convert /tmp/coderadio-rw.dmg -format UDZO -imagekey zlib-level=9 \
     -o "$DMG" >/dev/null 2>&1
   rm -rf "$STAGING" /tmp/coderadio-rw.dmg
