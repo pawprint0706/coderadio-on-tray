@@ -15,7 +15,7 @@ from coderadio_tray.metadata import MetadataClient, StationSnapshot, TrackInfo
 from coderadio_tray.player import MpvNotFoundError, PlayerWorker
 from coderadio_tray.single_instance import try_acquire as try_acquire_single_instance
 from coderadio_tray.ui import TrayController, TrayPopup
-from coderadio_tray.ui.icons import make_app_icon, make_tray_icon
+from coderadio_tray.ui.icons import make_app_icon
 
 logger = logging.getLogger(__name__)
 
