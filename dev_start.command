@@ -15,7 +15,7 @@ if [ ! -d .venv ]; then
 fi
 
 echo "Installing deps ..."
-.venv/bin/python -m pip install -q -e .
+.venv/bin/python -m pip install -q -e ".[macos]"
 
 echo "Starting Code Radio Tray (Ctrl+C to quit) ..."
 exec .venv/bin/python -m coderadio_tray --console
