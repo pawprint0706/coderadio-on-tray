@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Build a macOS release (PyInstaller onedir / .app) with bundled mpv.
+# Build a standalone macOS release (PyInstaller onedir / .app) with bundled mpv
+# and its Homebrew dylibs relocated next to the binary, so the result runs on a
+# Mac that has no Python and no Homebrew.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
@@ -22,10 +24,21 @@ if [[ ! -f "$MPV_SRC" ]]; then
     MPV_BREW="$(brew --prefix mpv)/bin/mpv"
     mkdir -p "$(dirname "$MPV_SRC")"
     cp "$MPV_BREW" "$MPV_SRC"
-    echo "Note: Homebrew mpv may need shared libs — verify with otool -L on a clean Mac."
   else
     echo "mpv not found at $MPV_SRC and Homebrew unavailable." >&2
     echo "Place a relocatable mpv binary at .tools/mpv/extract/mpv" >&2
+    exit 1
+  fi
+fi
+
+# dylibbundler relocates mpv's Homebrew dylibs into the bundle so the app is
+# self-contained. Homebrew install is best-effort (build-time toolchain only).
+if ! command -v dylibbundler >/dev/null 2>&1; then
+  if command -v brew >/dev/null 2>&1; then
+    echo "Installing dylibbundler via Homebrew ..."
+    brew install dylibbundler
+  else
+    echo "dylibbundler not found and Homebrew unavailable; mpv will not be relocatable." >&2
     exit 1
   fi
 fi
@@ -38,6 +51,26 @@ bundle_mpv() {
   mkdir -p "${dest}/mpv"
   cp "$MPV_SRC" "${dest}/mpv/mpv"
   chmod +x "${dest}/mpv/mpv"
+
+  # Collect mpv's non-system dylibs into .../mpv/libs and rewrite its load
+  # commands to @executable_path/libs/. Ignored locations (/usr/lib,
+  # /System/Library) exist on every Mac and are left absolute.
+  dylibbundler -od -b -of -ns \
+    -x "${dest}/mpv/mpv" \
+    -d "${dest}/mpv/libs" \
+    -p "@executable_path/libs/" \
+    -i /usr/lib -i /System/Library
+
+  # dylibbundler can add @executable_path/libs/ twice (from multiple source
+  # rpaths); a duplicate LC_RPATH aborts the process under dyld on launch.
+  # Delete duplicates, leaving exactly one rpath entry.
+  while [ "$(otool -l "${dest}/mpv/mpv" | grep -c 'LC_RPATH')" -gt 1 ]; do
+    install_name_tool -delete_rpath "@executable_path/libs/" "${dest}/mpv/mpv"
+  done
+
+  # install_name_tool invalidated the ad-hoc signature; re-sign so the bundle
+  # loads. The .app is deep-signed again below to seal it as a whole.
+  codesign --force -s - "${dest}/mpv/mpv" 2>/dev/null || true
 }
 
 APP_DIR="${ROOT}/dist/CodeRadioTray.app"
@@ -50,6 +83,7 @@ if [[ -d "$APP_DIR" ]]; then
     /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$PLIST" 2>/dev/null \
       || /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$PLIST"
   fi
+  codesign --force --deep -s - "$APP_DIR" 2>/dev/null || true
   echo "Build OK: $APP_DIR"
 elif [[ -d "$ONEDIR" ]]; then
   bundle_mpv "$ONEDIR"
