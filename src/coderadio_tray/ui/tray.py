@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from PySide6.QtCore import QObject, QTimer
+from PySide6.QtCore import QObject, QPoint, QTimer
 from PySide6.QtGui import QCursor, QGuiApplication
 from PySide6.QtWidgets import QSystemTrayIcon
 
@@ -76,9 +76,18 @@ class TrayController(QObject):
     def set_tooltip(self, text: str) -> None:
         self.tray.setToolTip(text)
 
+    def _popup_anchor(self) -> QPoint:
+        # Anchor to the tray icon geometry so the popup opens at a fixed spot
+        # under the icon (matching Windows) instead of at the click point, which
+        # on the macOS menu bar drifts with the pixel the user happened to hit.
+        geo = self.tray.geometry()
+        if geo.isValid() and not geo.isNull():
+            return QPoint(geo.center().x(), geo.bottom())
+        return QCursor.pos()
+
     def _on_activated(self, reason: QSystemTrayIcon.ActivationReason) -> None:
         if reason == QSystemTrayIcon.ActivationReason.Context:
-            self.popup.popup_at(QCursor.pos())
+            self.popup.popup_at(self._popup_anchor())
         elif reason == QSystemTrayIcon.ActivationReason.Trigger:
             self._left_click_handler()
 
