@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "coderadio-on-tray"
-version = "0.2.0"
+dynamic = ["version"]
 description = "Unofficial FreeCodeCamp Code Radio system tray player"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,6 +19,7 @@ dependencies = [
 dev = [
   "pyinstaller>=6.0",
   "pytest>=8.0",
+  "ruff>=0.5",
 ]
 macos = [
   "pyobjc-core>=10.0; sys_platform == 'darwin'",
@@ -36,3 +37,20 @@ packages = ["src/coderadio_tray"]
 
 [tool.hatch.build.targets.sdist]
 include = ["src/coderadio_tray", "docs", "README.md", "pyproject.toml"]
+
+[tool.hatch.version]
+path = "src/coderadio_tray/__init__.py"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+ignore = [
+  "E501",  # line length handled by formatter; ruff format wouldn't reflow long strings
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]

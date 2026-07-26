@@ -47,7 +47,7 @@ class PlayerWorker(QObject):
     def _on_play(self, url: str) -> None:
         try:
             self._player.play(url)
-        except Exception as exc:
+        except Exception:
             logger.exception("play failed")
         self.state_changed.emit()
 

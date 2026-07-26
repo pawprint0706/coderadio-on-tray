@@ -306,8 +306,7 @@ def _hide_dock_icon() -> None:
     transient windows (e.g. about dialog) can still take focus.
     """
     try:
-        from AppKit import NSApplication
-        from AppKit import NSApplicationActivationPolicyAccessory
+        from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
     except ImportError:
         logger.debug("pyobjc unavailable; running with a Dock icon")
         return

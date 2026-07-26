@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import ctypes
 import json
 import logging
@@ -49,14 +50,12 @@ class _UnixSocketTransport(_IpcTransport):
     def recv(self, n: int = 4096) -> bytes:
         try:
             return self._sock.recv(n)
-        except socket.timeout:
+        except TimeoutError:
             raise BlockingIOError("no data available") from None
 
     def close(self) -> None:
-        try:
+        with contextlib.suppress(OSError):
             self._sock.close()
-        except OSError:
-            pass
 
     def fileno(self) -> int:
         return self._sock.fileno()
@@ -66,7 +65,7 @@ class _WinPipeTransport(_IpcTransport):
     def __init__(self, path: str) -> None:
         import msvcrt
 
-        self._fp = open(path, "r+b", buffering=0)
+        self._fp = open(path, "r+b", buffering=0)  # noqa: SIM115 - closed in close(), not a transient use
         self._handle = msvcrt.get_osfhandle(self._fp.fileno())
 
         self._peek = ctypes.windll.kernel32.PeekNamedPipe
@@ -95,10 +94,8 @@ class _WinPipeTransport(_IpcTransport):
         return os.read(self._fp.fileno(), to_read)
 
     def close(self) -> None:
-        try:
+        with contextlib.suppress(OSError):
             self._fp.close()
-        except OSError:
-            pass
 
     def fileno(self) -> int:
         return self._fp.fileno()
@@ -175,10 +172,8 @@ class MpvPlayer:
             if self._proc and self._proc.poll() is None:
                 return
             if sys.platform != "win32" and os.path.exists(self._ipc_path):
-                try:
+                with contextlib.suppress(OSError):
                     os.unlink(self._ipc_path)
-                except OSError:
-                    pass
             cmd = [
                 self._mpv_path,
                 "--no-video",
@@ -188,7 +183,7 @@ class MpvPlayer:
                 "--cache=yes",
                 "--no-terminal",
                 "--input-media-keys=no",
-                f"--title=Code Radio Tray",
+                "--title=Code Radio Tray",
                 f"--volume={self._mpv_volume()}",
                 f"--input-ipc-server={self._ipc_path}",
                 "--msg-level=all=error",
@@ -232,10 +227,8 @@ class MpvPlayer:
     def _ensure_connection(self) -> None:
         if self._proc is None or self._proc.poll() is not None:
             if self._transport is not None:
-                try:
+                with contextlib.suppress(OSError):
                     self._transport.close()
-                except OSError:
-                    pass
                 self._transport = None
             self.start_idle()
             return
@@ -417,10 +410,8 @@ class MpvPlayer:
             transport = self._transport
             self._transport = None
             if transport is not None:
-                try:
+                with contextlib.suppress(OSError):
                     transport.close()
-                except OSError:
-                    pass
             proc = self._proc
             self._proc = None
             if proc is not None and proc.poll() is None:
@@ -428,10 +419,8 @@ class MpvPlayer:
                     proc.terminate()
                     proc.wait(timeout=2)
                 except Exception:
-                    try:
+                    with contextlib.suppress(Exception):
                         proc.kill()
-                    except Exception:
-                        pass
             if sys.platform != "win32":
                 try:
                     if os.path.exists(self._ipc_path):
