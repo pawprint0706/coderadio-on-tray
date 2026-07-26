@@ -143,7 +143,8 @@ pytest
 ## Docs
 
 - `docs/considerations.md` — design decisions
-- `docs/review-v0.1.md` / `docs/review-v0.2.md` — implementation reviews
+- `docs/review-v0.1.md` / `docs/review-v0.2.md` / `docs/review-v0.3.md` — implementation reviews
+- `docs/smoke-sleep-network.md` — sleep / network reconnect smoke checklist (results blank until filled)
 
 ## License
 

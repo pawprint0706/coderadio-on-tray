@@ -27,7 +27,7 @@ macOS는 DMG(드래그 설치)가 배포 산출물이다. P2(Polish)·P3(기능 
 | Windows 배포 산출물 | ✅ | **`CodeRadioTray-0.3.0-win64-setup.exe`** (Inno, per-user, ~69MB) |
 | Windows 설치·실행 검증 | ✅ | 설치 마법사 → 유저 경로 설치 → 실행 확인 (2026-07-26) |
 | macOS 단독 빌드 | ✅ | `.app` + dylibbundler + rpath 정리 + ad-hoc 서명 |
-| macOS 배포 산출물 | ✅ | `CodeRadioTray-*-macos.dmg` (UDZO + `/Applications` symlink) |
+| macOS 배포 산출물 | ✅ | `CodeRadioTray-0.3.0-macos.dmg` — **GitHub Release `v0.3.0`에 첨부 완료** |
 | CI | ✅ | `.github/workflows/ci.yml` |
 | 버전 single-source | ✅ | hatch `dynamic = ["version"]` ← `__init__.__version__` |
 | 단위 테스트 | ✅ | paths / single_instance / popup / icons / core 등 |
