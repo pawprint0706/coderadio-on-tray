@@ -1,47 +1,121 @@
 from __future__ import annotations
 
-from coderadio_tray.ui.icons import make_app_icon, make_tray_icon
+from PySide6.QtGui import QColor
+
+from coderadio_tray.ui import icons
+from coderadio_tray.ui.icons import (
+    TRAY_ICON_SIZES,
+    _render_app_pixmap,
+    _render_tray_pixmap,
+    make_app_icon,
+    make_tray_icon,
+)
 
 
-def _platform_ink(monkeypatch, *, is_mask):
+def _force_platform_ink(monkeypatch, *, is_mask):
     """Force a deterministic ink + mask flag regardless of host platform."""
     from PySide6.QtGui import QColor
-
-    from coderadio_tray.ui import icons
 
     ink = QColor(0, 0, 0) if is_mask else QColor(255, 255, 255)
     monkeypatch.setattr(icons, "_platform_ink", lambda: (ink, is_mask))
 
 
 def test_tray_icon_is_mask_on_template_platform(monkeypatch, qapp):
-    _platform_ink(monkeypatch, is_mask=True)
+    _force_platform_ink(monkeypatch, is_mask=True)
     icon = make_tray_icon(playing=False)
     assert icon.isMask() is True
 
 
 def test_tray_icon_not_mask_on_colorink_platform(monkeypatch, qapp):
-    _platform_ink(monkeypatch, is_mask=False)
+    _force_platform_ink(monkeypatch, is_mask=False)
     icon = make_tray_icon(playing=True)
     assert icon.isMask() is False
 
 
 def test_tray_icon_has_standard_sizes(monkeypatch, qapp):
-    _platform_ink(monkeypatch, is_mask=True)
+    _force_platform_ink(monkeypatch, is_mask=True)
     icon = make_tray_icon(playing=False, error=False)
     sizes = icon.availableSizes()
     assert len(sizes) > 0
+    assert {size.height() for size in sizes} == set(TRAY_ICON_SIZES)
+    assert all(size.width() > size.height() for size in sizes)
 
 
 def test_tray_icon_error_state_renders(monkeypatch, qapp):
-    _platform_ink(monkeypatch, is_mask=True)
+    _force_platform_ink(monkeypatch, is_mask=True)
     icon = make_tray_icon(playing=False, error=True)
     # Should not raise and should produce a non-null pixmap at a usable size.
     pm = icon.pixmap(32)
     assert not pm.isNull()
 
 
-def test_app_icon_campfire_renders(qapp):
+def _center_alpha_count(pixmap) -> int:
+    image = pixmap.toImage()
+    left = image.width() // 4
+    right = image.width() * 3 // 4
+    return sum(
+        image.pixelColor(x, y).alpha() for y in range(image.height()) for x in range(left, right)
+    )
+
+
+def test_playing_icon_keeps_center_campfire(qapp):
+    pixmap = _render_tray_pixmap(128, playing=True, error=False, ink=QColor("#ffffff"))
+    assert _center_alpha_count(pixmap) > 0
+
+
+def test_paused_icon_removes_center_and_keeps_brackets(qapp):
+    pixmap = _render_tray_pixmap(128, playing=False, error=False, ink=QColor("#ffffff"))
+    image = pixmap.toImage()
+    assert _center_alpha_count(pixmap) == 0
+    assert any(
+        image.pixelColor(x, y).alpha() > 0
+        for y in range(image.height())
+        for x in range(image.width() // 4)
+    )
+    assert any(
+        image.pixelColor(x, y).alpha() > 0
+        for y in range(image.height())
+        for x in range(image.width() * 3 // 4, image.width())
+    )
+
+
+def test_app_icon_source_logo_renders(qapp):
     icon = make_app_icon()
     pm = icon.pixmap(256)
     assert not pm.isNull()
     assert len(icon.availableSizes()) >= 4
+
+
+def test_app_icon_has_black_outline_and_white_mark(qapp):
+    image = _render_app_pixmap(256).toImage()
+    opaque = [
+        image.pixelColor(x, y)
+        for y in range(image.height())
+        for x in range(image.width())
+        if image.pixelColor(x, y).alpha() > 200
+    ]
+    assert any(color.lightness() < 32 for color in opaque)
+    assert any(color.lightness() > 223 for color in opaque)
+
+
+def test_macos_uses_black_template_ink(monkeypatch, qapp):
+    monkeypatch.setattr(icons.sys, "platform", "darwin")
+    ink, is_mask = icons._platform_ink()
+    assert ink == QColor("#000000")
+    assert is_mask is True
+
+
+def test_windows_light_taskbar_uses_dark_ink(monkeypatch, qapp):
+    monkeypatch.setattr(icons.sys, "platform", "win32")
+    monkeypatch.setattr(icons, "_win_taskbar_is_light", lambda: True)
+    ink, is_mask = icons._platform_ink()
+    assert ink == QColor("#1a1a1a")
+    assert is_mask is False
+
+
+def test_windows_dark_taskbar_uses_light_ink(monkeypatch, qapp):
+    monkeypatch.setattr(icons.sys, "platform", "win32")
+    monkeypatch.setattr(icons, "_win_taskbar_is_light", lambda: False)
+    ink, is_mask = icons._platform_ink()
+    assert ink == QColor("#f5f5f5")
+    assert is_mask is False

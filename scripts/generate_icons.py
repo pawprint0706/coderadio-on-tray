@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate app.ico / PNG / macOS iconset from the campfire painter."""
+"""Generate app.ico / PNG / macOS iconset from the supplied FCC mark."""
 
 from __future__ import annotations
 

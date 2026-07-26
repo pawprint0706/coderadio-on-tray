@@ -9,6 +9,7 @@ ROOT = SPECDIR.parent
 SRC = ROOT / "src"
 ICON_ICO = SRC / "coderadio_tray" / "resources" / "icons" / "app.ico"
 ICON_ICNS = SRC / "coderadio_tray" / "resources" / "icons" / "app.icns"
+ICON_SOURCE_DIR = SRC / "coderadio_tray" / "resources" / "icons" / "source"
 
 # Do NOT collect_all(PySide6) — that pulls WebEngine/3D/Charts (~700MB+).
 # Hooks for QtCore/Gui/Widgets/Network follow from imports in the app.
@@ -17,7 +18,10 @@ a = Analysis(
     [str(SRC / "coderadio_tray" / "__main__.py")],
     pathex=[str(SRC)],
     binaries=[],
-    datas=[],
+    datas=[
+        (str(ICON_SOURCE_DIR / "fcc_primary_small.png"), "coderadio_tray/resources/icons/source"),
+        (str(ICON_SOURCE_DIR / "fcc_primary_small.svg"), "coderadio_tray/resources/icons/source"),
+    ],
     hiddenimports=[
         "coderadio_tray",
         "coderadio_tray.app",
@@ -122,7 +126,7 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleName": "Code Radio Tray",
             "CFBundleDisplayName": "Code Radio Tray",
-            "CFBundleShortVersionString": "0.3.0",
+            "CFBundleShortVersionString": "0.4.0",
             "NSHighResolutionCapable": True,
             "LSUIElement": True,
         },

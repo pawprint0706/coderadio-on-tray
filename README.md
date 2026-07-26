@@ -21,9 +21,10 @@ Unofficial [freeCodeCamp Code Radio](https://coderadio.freecodecamp.org/) player
 winget install shinchiro.mpv
 ```
 
-Tray and app icons use an original **campfire** silhouette inspired by the freeCodeCamp
-motif (unofficial homage — not their trademark asset). The same artwork ships in the
-Windows installer wizard, `.exe`, and (on Mac builds) `.icns` / Finder icon.
+Tray and app icons use the supplied freeCodeCamp primary mark. The playing state and
+main app icon show the complete mark; paused/stopped shows its two original brackets
+with the center campfire removed. freeCodeCamp and its logo are trademarks of the
+freeCodeCamp organization; this remains an unofficial, unaffiliated client.
 
 ## Run (development)
 
@@ -123,7 +124,7 @@ Get-FileHash .\CodeRadioTray-0.3.0-win64-setup.exe -Algorithm SHA256
 4. Browser “download is not commonly downloaded” / “keep anyway”: use **Keep** / **Keep anyway**, then run the `.exe` and follow step 3 if SmartScreen appears again.
 5. If your org policy blocks unsigned installers entirely, use a machine where you can approve the prompt, or run from source (`pip install -e .`).
 
-After install, the Start Menu / desktop shortcut and tray use the campfire app icon.
+After install, the Start Menu / desktop shortcut and tray use the freeCodeCamp mark.
 
 ### macOS
 
@@ -132,7 +133,7 @@ chmod +x scripts/build_macos.sh
 ./scripts/build_macos.sh
 ```
 
-Output under `dist/` (`.app` / DMG). Dock icon is suppressed (`LSUIElement` + runtime Accessory policy); Finder still shows the campfire `.icns` when built with `iconutil`.
+Output under `dist/` (`.app` / DMG). Dock icon is suppressed (`LSUIElement` + runtime Accessory policy); Finder still shows the generated freeCodeCamp `.icns` when built with `iconutil`.
 
 #### macOS Gatekeeper / quarantine
 
