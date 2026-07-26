@@ -126,8 +126,10 @@ class TrayPopup(QWidget):
         self._apply_theme()
         QGuiApplication.styleHints().colorSchemeChanged.connect(self._apply_theme)
 
-    def _apply_theme(self, _scheme: object = None) -> None:
-        dark = QGuiApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark
+    def _apply_theme(self, scheme: object = None) -> None:
+        if scheme is None:
+            scheme = QGuiApplication.styleHints().colorScheme()
+        dark = scheme == Qt.ColorScheme.Dark
         if dark:
             bg, fg, border = "#1e1e1e", "#f0f0f0", "#3a3a3a"
             btn_bg, btn_hover = "#2d2d2d", "#3a3a3a"
