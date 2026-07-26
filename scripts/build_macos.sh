@@ -85,6 +85,21 @@ if [[ -d "$APP_DIR" ]]; then
   fi
   codesign --force --deep -s - "$APP_DIR" 2>/dev/null || true
   echo "Build OK: $APP_DIR"
+
+  # Wrap the .app into a compressed DMG with an /Applications symlink so the
+  # release artifact is a single file users can drag-and-drop install.
+  VERSION=$("$PYTHON" -c "from coderadio_tray import __version__; print(__version__)")
+  DMG="${ROOT}/dist/CodeRadioTray-${VERSION}-macos.dmg"
+  STAGING="$(mktemp -d)"
+  cp -R "$APP_DIR" "$STAGING/"
+  ln -s /Applications "$STAGING/Applications"
+  SIZE_K=$(/usr/bin/du -sk "$STAGING" | awk '{print int($1*1.1+1024)}')
+  hdiutil create -srcfolder "$STAGING" -volname CodeRadioTray -fs HFS+ \
+    -size "${SIZE_K}k" /tmp/coderadio-rw.dmg >/dev/null 2>&1
+  hdiutil convert /tmp/coderadio-rw.dmg -format UDZO -imagekey zlib-level=9 \
+    -o "$DMG" >/dev/null 2>&1
+  rm -rf "$STAGING" /tmp/coderadio-rw.dmg
+  echo "DMG OK: $DMG"
 elif [[ -d "$ONEDIR" ]]; then
   bundle_mpv "$ONEDIR"
   echo "Build OK: $ONEDIR"
