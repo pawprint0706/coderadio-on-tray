@@ -51,9 +51,7 @@ def test_windows_tray_icon_is_square_and_taller_fill(monkeypatch, qapp):
     assert pixmap.height() == 32
     image = pixmap.toImage()
     top_band = sum(
-        image.pixelColor(x, y).alpha()
-        for y in range(max(1, 32 // 10))
-        for x in range(32)
+        image.pixelColor(x, y).alpha() for y in range(max(1, 32 // 10)) for x in range(32)
     )
     assert top_band > 0
     # Paused must keep full brackets (compression, not side-crop).
@@ -72,7 +70,6 @@ def test_non_windows_tray_icon_stays_rectangular(monkeypatch, qapp):
     monkeypatch.setattr(icons.sys, "platform", "darwin")
     pixmap = _render_tray_pixmap(32, playing=True, error=False, ink=QColor("#ffffff"))
     assert pixmap.width() > pixmap.height()
-
 
 
 def test_tray_icon_error_state_renders(monkeypatch, qapp):
@@ -120,16 +117,23 @@ def test_app_icon_source_logo_renders(qapp):
     assert len(icon.availableSizes()) >= 4
 
 
-def test_app_icon_has_black_outline_and_white_mark(qapp):
+def test_app_icon_has_navy_tile_and_white_mark(qapp):
     image = _render_app_pixmap(256).toImage()
-    opaque = [
-        image.pixelColor(x, y)
+    # Outside the rounded tile: transparent corner.
+    assert image.pixelColor(0, 0).alpha() < 10
+
+    # Sample the tile face away from the logo and the top gloss hotspot.
+    face = image.pixelColor(48, 200)
+    assert face.alpha() > 200
+    assert face.blue() > face.red()
+    assert face.lightness() < 48
+
+    # White FCC mark is present (brackets / campfire).
+    assert any(
+        image.pixelColor(x, y).alpha() > 200 and image.pixelColor(x, y).lightness() > 223
         for y in range(image.height())
         for x in range(image.width())
-        if image.pixelColor(x, y).alpha() > 200
-    ]
-    assert any(color.lightness() < 32 for color in opaque)
-    assert any(color.lightness() > 223 for color in opaque)
+    )
 
 
 def test_macos_uses_black_template_ink(monkeypatch, qapp):

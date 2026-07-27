@@ -1,4 +1,9 @@
-"""Tray and application icons based on the supplied freeCodeCamp mark."""
+"""Tray and application icons based on the supplied freeCodeCamp mark.
+
+Tray icons stay monochrome/template for the menu bar. The app icon is a
+freeCodeCamp-navy (#0a0a23) high-gloss rounded tile with the white brackets
++ campfire mark (no outline stroke).
+"""
 
 from __future__ import annotations
 
@@ -6,8 +11,24 @@ import sys
 from functools import lru_cache
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QGuiApplication, QIcon, QImage, QPainter, QPixmap
+from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtGui import (
+    QColor,
+    QGuiApplication,
+    QIcon,
+    QImage,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPixmap,
+    QRadialGradient,
+)
+
+# freeCodeCamp navy — app-icon tile base (high-gloss rounded square).
+_APP_TILE_BASE = QColor("#0a0a23")
+# macOS continuous-corner feel for a full-bleed app tile (matches llm-usage-meter).
+_APP_CORNER_RATIO = 0.2237
+_APP_LOGO_FILL = 0.70
 
 TRAY_ICON_SIZES = (16, 18, 20, 22, 24, 32, 44, 48, 64)
 
@@ -186,41 +207,88 @@ def _render_tray_pixmap(size: int, *, playing: bool, error: bool, ink: QColor) -
     )
 
 
+def _paint_app_tile(painter: QPainter, tile_rect: QRectF, radius: float) -> None:
+    """High-gloss rounded square in freeCodeCamp navy (#0a0a23)."""
+    shape = QPainterPath()
+    shape.addRoundedRect(tile_rect, radius, radius)
+    painter.setClipPath(shape)
+
+    base = QLinearGradient(tile_rect.topLeft(), tile_rect.bottomLeft())
+    base.setColorAt(0.0, QColor("#1a1a3a"))
+    base.setColorAt(0.35, _APP_TILE_BASE)
+    base.setColorAt(1.0, QColor("#050512"))
+    painter.fillPath(shape, base)
+
+    sheen = QLinearGradient(
+        tile_rect.topLeft(), QPointF(tile_rect.center().x(), tile_rect.bottom())
+    )
+    sheen.setColorAt(0.0, QColor(255, 255, 255, 58))
+    sheen.setColorAt(0.28, QColor(255, 255, 255, 18))
+    sheen.setColorAt(0.55, QColor(255, 255, 255, 0))
+    sheen.setColorAt(1.0, QColor(0, 0, 0, 0))
+    painter.fillPath(shape, sheen)
+
+    gloss = QRadialGradient(
+        QPointF(tile_rect.center().x(), tile_rect.top() + tile_rect.height() * 0.18),
+        tile_rect.width() * 0.55,
+    )
+    gloss.setColorAt(0.0, QColor(255, 255, 255, 72))
+    gloss.setColorAt(0.35, QColor(255, 255, 255, 22))
+    gloss.setColorAt(1.0, QColor(255, 255, 255, 0))
+    painter.fillPath(shape, gloss)
+
+    shade = QLinearGradient(
+        QPointF(tile_rect.center().x(), tile_rect.center().y()), tile_rect.bottomLeft()
+    )
+    shade.setColorAt(0.0, QColor(0, 0, 0, 0))
+    shade.setColorAt(1.0, QColor(0, 0, 0, 90))
+    painter.fillPath(shape, shade)
+
+    painter.setClipping(False)
+
+    painter.setPen(Qt.PenStyle.NoPen)
+    rim = QPainterPath(shape)
+    inner = QPainterPath()
+    rim_inset = max(1.5, tile_rect.width() * 0.012)
+    inner.addRoundedRect(
+        tile_rect.adjusted(rim_inset, rim_inset, -rim_inset, -rim_inset),
+        radius * 0.92,
+        radius * 0.92,
+    )
+    rim = rim.subtracted(inner)
+    rim_grad = QLinearGradient(tile_rect.topLeft(), tile_rect.bottomRight())
+    rim_grad.setColorAt(0.0, QColor(255, 255, 255, 70))
+    rim_grad.setColorAt(0.45, QColor(255, 255, 255, 18))
+    rim_grad.setColorAt(1.0, QColor(255, 255, 255, 8))
+    painter.fillPath(rim, rim_grad)
+
+
 def _render_app_pixmap(size: int) -> QPixmap:
+    """Navy high-gloss tile with the white FCC brackets + campfire mark."""
     canvas = QPixmap(size, size)
     canvas.fill(Qt.GlobalColor.transparent)
 
-    source = QPixmap.fromImage(_logo_image(brackets_only=False, ink=None))
-    max_extent = max(1, round(size * 0.90))
-    logo = source.scaled(
-        max_extent,
-        max_extent,
-        Qt.AspectRatioMode.KeepAspectRatio,
-        Qt.TransformationMode.SmoothTransformation,
-    )
-    black = QPixmap.fromImage(_logo_image(brackets_only=False, ink=QColor("#000000")))
-    black = black.scaled(
-        logo.size(),
-        Qt.AspectRatioMode.KeepAspectRatio,
-        Qt.TransformationMode.SmoothTransformation,
-    )
-
-    x = (size - logo.width()) // 2
-    y = (size - logo.height()) // 2
-    stroke = max(1, round(size * 0.018))
     painter = QPainter(canvas)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    for dx, dy in (
-        (-stroke, -stroke),
-        (0, -stroke),
-        (stroke, -stroke),
-        (-stroke, 0),
-        (stroke, 0),
-        (-stroke, stroke),
-        (0, stroke),
-        (stroke, stroke),
-    ):
-        painter.drawPixmap(x + dx, y + dy, black)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+
+    # Leave a 1px optical margin so downscales keep a clean alpha edge.
+    inset = max(1.0, size * 0.02)
+    tile = size - 2 * inset
+    radius = tile * _APP_CORNER_RATIO
+    tile_rect = QRectF(inset, inset, tile, tile)
+    _paint_app_tile(painter, tile_rect, radius)
+
+    logo = QPixmap.fromImage(_logo_image(brackets_only=False, ink=QColor("#ffffff")))
+    max_extent = max(1, round(tile * _APP_LOGO_FILL))
+    logo = logo.scaled(
+        max_extent,
+        max_extent,
+        Qt.AspectRatioMode.KeepAspectRatio,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    x = round((size - logo.width()) / 2)
+    y = round((size - logo.height()) / 2)
     painter.drawPixmap(x, y, logo)
     painter.end()
     return canvas

@@ -17,6 +17,8 @@ def test_popup_light_theme_sheet(qapp):
     assert "#ffffff" in sheet  # light background
     assert "#1f2328" in sheet  # dark text
     assert "#1e1e1e" not in sheet  # no dark bg
+    assert "border-radius: 12px" in sheet
+    assert "border: 1px solid" in sheet
 
 
 def test_popup_dark_theme_sheet(qapp):
@@ -25,6 +27,15 @@ def test_popup_dark_theme_sheet(qapp):
     sheet = popup.styleSheet()
     assert "#1e1e1e" in sheet  # dark background
     assert "#f0f0f0" in sheet  # light text
+    assert "border-radius: 12px" in sheet
+    assert "#5a5a5a" in sheet  # stronger outer border
+
+
+def test_popup_uses_rounded_panel_shell(qapp):
+    popup = TrayPopup()
+    assert popup.testAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    assert popup._panel.objectName() == "panel"
+    assert popup._panel.graphicsEffect() is not None
 
 
 def test_popup_set_playing_toggles_button_label(qapp):
@@ -79,7 +90,7 @@ def test_global_monitor_does_not_close_for_a_click_inside_the_panel(qapp):
     try:
         with patch(
             "coderadio_tray.ui.popup.QCursor.pos",
-            return_value=popup.frameGeometry().center(),
+            return_value=popup._panel.mapToGlobal(popup._panel.rect().center()),
         ):
             popup._outside_clicked.emit()
         assert popup.isVisible()

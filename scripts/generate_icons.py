@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate app.ico / PNG / macOS iconset from the supplied FCC mark."""
+"""Generate app.ico / PNG / macOS iconset from the FCC mark on a navy gloss tile."""
 
 from __future__ import annotations
 

@@ -4,10 +4,12 @@ import sys
 import time
 
 from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtGui import QCursor, QGuiApplication, QMouseEvent
+from PySide6.QtGui import QColor, QCursor, QGuiApplication, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QFrame,
+    QGraphicsDropShadowEffect,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -20,6 +22,9 @@ from coderadio_tray import platform_mac
 
 # Non-macOS Qt.Popup windows need to swallow the tray interaction briefly.
 OUTSIDE_CLICK_GUARD_MS = 300
+PANEL_RADIUS = 12
+SHADOW_MARGIN = 10
+POPUP_WIDTH = 300
 
 
 class TrayPopup(QWidget):
@@ -40,13 +45,27 @@ class TrayPopup(QWidget):
             window_type | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint,
         )
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, False)
-        self.setFixedWidth(300)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setFixedWidth(POPUP_WIDTH + 2 * SHADOW_MARGIN)
         self._ignore_outside_until = 0.0
         self._mouse_monitor = None
         if sys.platform == "darwin":
             self.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
             self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
             self._outside_clicked.connect(self._on_global_mouse_down)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(SHADOW_MARGIN, SHADOW_MARGIN, SHADOW_MARGIN, SHADOW_MARGIN)
+        outer.setSpacing(0)
+
+        self._panel = QFrame(self)
+        self._panel.setObjectName("panel")
+        shadow = QGraphicsDropShadowEffect(self._panel)
+        shadow.setBlurRadius(24)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 90))
+        self._panel.setGraphicsEffect(shadow)
+        outer.addWidget(self._panel)
 
         self._track = QLabel("Code Radio")
         self._track.setObjectName("track_label")
@@ -91,7 +110,7 @@ class TrayPopup(QWidget):
         foot.addStretch(1)
         foot.addWidget(quit_btn)
 
-        root = QVBoxLayout(self)
+        root = QVBoxLayout(self._panel)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(8)
         root.addWidget(self._track)
@@ -99,42 +118,6 @@ class TrayPopup(QWidget):
         root.addLayout(vol_row)
         root.addLayout(btn_row)
         root.addLayout(foot)
-
-        self.setStyleSheet(
-            """
-            TrayPopup {
-                background: #1e1e1e;
-                color: #f0f0f0;
-                border: 1px solid #3a3a3a;
-                border-radius: 8px;
-            }
-            QLabel { color: #f0f0f0; }
-            QPushButton {
-                background: #2d2d2d;
-                border: 1px solid #444;
-                border-radius: 4px;
-                padding: 6px 10px;
-            }
-            QPushButton:hover { background: #3a3a3a; }
-            QComboBox {
-                background: #2d2d2d;
-                border: 1px solid #444;
-                border-radius: 4px;
-                padding: 4px 8px;
-            }
-            QSlider::groove:horizontal {
-                height: 4px;
-                background: #444;
-                border-radius: 2px;
-            }
-            QSlider::handle:horizontal {
-                width: 12px;
-                margin: -5px 0;
-                background: #ffffff;
-                border-radius: 6px;
-            }
-            """
-        )
 
         self._volume.valueChanged.connect(lambda v: self._vol_label.setText(f"{v}%"))
 
@@ -146,63 +129,52 @@ class TrayPopup(QWidget):
             scheme = QGuiApplication.styleHints().colorScheme()
         dark = scheme == Qt.ColorScheme.Dark
         if dark:
-            bg, fg, border = "#1e1e1e", "#f0f0f0", "#3a3a3a"
+            bg, fg, border = "#1e1e1e", "#f0f0f0", "#5a5a5a"
             btn_bg, btn_hover = "#2d2d2d", "#3a3a3a"
             status_color = "#9aa0a6"
             groove, handle = "#444", "#ffffff"
         else:
-            bg, fg, border = "#ffffff", "#1f2328", "#d0d7de"
+            bg, fg, border = "#ffffff", "#1f2328", "#8c959f"
             btn_bg, btn_hover = "#f6f8fa", "#e9ecef"
             status_color = "#57606a"
             groove, handle = "#d0d7de", "#1f2328"
-        sheet = """
-        TrayPopup {
-            background: __BG__;
-            color: __FG__;
-            border: 1px solid __BORDER__;
-            border-radius: 8px;
-        }
-        QLabel { color: __FG__; }
-        #track_label { font-size: 13px; font-weight: 600; }
-        #status_label { color: __STATUS__; font-size: 11px; }
-        QPushButton {
-            background: __BTN__;
-            color: __FG__;
-            border: 1px solid __BORDER__;
+        sheet = f"""
+        #panel {{
+            background: {bg};
+            color: {fg};
+            border: 1px solid {border};
+            border-radius: {PANEL_RADIUS}px;
+        }}
+        QLabel {{ color: {fg}; }}
+        #track_label {{ font-size: 13px; font-weight: 600; }}
+        #status_label {{ color: {status_color}; font-size: 11px; }}
+        QPushButton {{
+            background: {btn_bg};
+            color: {fg};
+            border: 1px solid {border};
             border-radius: 4px;
             padding: 6px 10px;
-        }
-        QPushButton:hover { background: __BTNHOVER__; }
-        QComboBox {
-            background: __BTN__;
-            color: __FG__;
-            border: 1px solid __BORDER__;
+        }}
+        QPushButton:hover {{ background: {btn_hover}; }}
+        QComboBox {{
+            background: {btn_bg};
+            color: {fg};
+            border: 1px solid {border};
             border-radius: 4px;
             padding: 4px 8px;
-        }
-        QSlider::groove:horizontal {
+        }}
+        QSlider::groove:horizontal {{
             height: 4px;
-            background: __GROOVE__;
+            background: {groove};
             border-radius: 2px;
-        }
-        QSlider::handle:horizontal {
+        }}
+        QSlider::handle:horizontal {{
             width: 12px;
             margin: -5px 0;
-            background: __HANDLE__;
+            background: {handle};
             border-radius: 6px;
-        }
+        }}
         """
-        for key, val in {
-            "__BG__": bg,
-            "__FG__": fg,
-            "__BORDER__": border,
-            "__BTN__": btn_bg,
-            "__BTNHOVER__": btn_hover,
-            "__STATUS__": status_color,
-            "__GROOVE__": groove,
-            "__HANDLE__": handle,
-        }.items():
-            sheet = sheet.replace(key, val)
         self.setStyleSheet(sheet)
 
     def _on_bitrate(self, _index: int) -> None:
@@ -238,15 +210,19 @@ class TrayPopup(QWidget):
         else:
             geo = screen.availableGeometry()
             w, h = self.width(), self.height()
-            gap = 10
-            x = min(max(global_pos.x() - w // 2, geo.left()), geo.left() + geo.width() - w)
+            # Place the visible panel edge near the tray; undo the shadow inset.
+            gap = 10 - SHADOW_MARGIN
+            x = min(
+                max(global_pos.x() - w // 2, geo.left() - SHADOW_MARGIN),
+                geo.left() + geo.width() - w + SHADOW_MARGIN,
+            )
             y = global_pos.y() - h - gap
-            if y < geo.top():
+            if y < geo.top() - SHADOW_MARGIN:
                 y = global_pos.y() + gap
-            if y + h > geo.top() + geo.height():
-                y = geo.top() + geo.height() - h
-            if y < geo.top():
-                y = geo.top()
+            if y + h > geo.top() + geo.height() + SHADOW_MARGIN:
+                y = geo.top() + geo.height() - h + SHADOW_MARGIN
+            if y < geo.top() - SHADOW_MARGIN:
+                y = geo.top() - SHADOW_MARGIN
             self.move(x, y)
         self._arm_outside_click_guard()
         if sys.platform == "darwin":
@@ -282,12 +258,17 @@ class TrayPopup(QWidget):
         """True while a nested Qt popup (e.g. QComboBox list) is open."""
         return QApplication.activePopupWidget() is not None
 
+    def _panel_geometry_contains(self, global_pos) -> bool:
+        """Hit-test the rounded panel (not the translucent shadow margin)."""
+        origin = self._panel.mapToGlobal(self._panel.rect().topLeft())
+        return self._panel.rect().translated(origin).contains(global_pos)
+
     def _on_global_mouse_down(self) -> None:
         """Ignore native monitor callbacks for clicks that landed in the panel."""
         if (
             self.isVisible()
             and not self._child_popup_open()
-            and not self.frameGeometry().contains(QCursor.pos())
+            and not self._panel_geometry_contains(QCursor.pos())
         ):
             self.hide()
 
@@ -298,7 +279,7 @@ class TrayPopup(QWidget):
             and not self._child_popup_open()
             and event.type() == QEvent.Type.MouseButtonPress
             and isinstance(event, QMouseEvent)
-            and not self.frameGeometry().contains(event.globalPosition().toPoint())
+            and not self._panel_geometry_contains(event.globalPosition().toPoint())
         ):
             self.hide()
             return False
@@ -313,10 +294,9 @@ class TrayPopup(QWidget):
                 QEvent.Type.MouseButtonDblClick,
             )
             and isinstance(event, QMouseEvent)
+            and not self._panel_geometry_contains(event.globalPosition().toPoint())
         ):
-            point = event.globalPosition().toPoint()
-            if not self.frameGeometry().contains(point):
-                return True
+            return True
         return super().eventFilter(watched, event)
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
