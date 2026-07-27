@@ -299,20 +299,6 @@ def _install_sigint_handler(qt_app: QApplication, app: CodeRadioApp) -> None:
     qt_app._sigint_timer = timer
 
 
-def _hide_dock_icon() -> None:
-    """macOS: run as a menu-bar-only (accessory) app so no Dock icon or app
-    menu appears — only the tray icon. Must run on the main thread before
-    QApplication is created. Accessory (1), not Prohibited (2), so any future
-    transient windows (e.g. about dialog) can still take focus.
-    """
-    try:
-        from AppKit import NSApplication, NSApplicationActivationPolicyAccessory
-    except ImportError:
-        logger.debug("pyobjc unavailable; running with a Dock icon")
-        return
-    NSApplication.sharedApplication().setActivationPolicy_(NSApplicationActivationPolicyAccessory)
-
-
 def run(*, hide_console: bool | None = None) -> int:
     if hide_console is None:
         hide_console = os.environ.get("CODERADIO_TRAY_CONSOLE", "").lower() not in {
@@ -344,7 +330,9 @@ def run(*, hide_console: bool | None = None) -> int:
     qt_app._single_instance_lock = instance_lock
 
     if sys.platform == "darwin":
-        _hide_dock_icon()
+        from coderadio_tray.platform_mac import hide_dock_icon
+
+        hide_dock_icon()
     qt_app.setApplicationName("Code Radio Tray")
     qt_app.setOrganizationName("coderadio-on-tray")
     qt_app.setApplicationDisplayName("Code Radio Tray")

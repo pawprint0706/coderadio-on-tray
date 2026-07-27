@@ -29,6 +29,7 @@ a = Analysis(
         "coderadio_tray.paths",
         "coderadio_tray.single_instance",
         "coderadio_tray.platform_win",
+        "coderadio_tray.platform_mac",
         "coderadio_tray.metadata",
         "coderadio_tray.metadata.client",
         "coderadio_tray.player",

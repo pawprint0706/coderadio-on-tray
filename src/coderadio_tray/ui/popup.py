@@ -1,8 +1,12 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QGuiApplication
+import sys
+import time
+
+from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtGui import QCursor, QGuiApplication, QMouseEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QHBoxLayout,
     QLabel,
@@ -11,6 +15,11 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from coderadio_tray import platform_mac
+
+# Non-macOS Qt.Popup windows need to swallow the tray interaction briefly.
+OUTSIDE_CLICK_GUARD_MS = 300
 
 
 class TrayPopup(QWidget):
@@ -22,16 +31,22 @@ class TrayPopup(QWidget):
     bitrate_changed = Signal(str)
     open_site_clicked = Signal()
     quit_clicked = Signal()
+    _outside_clicked = Signal()
 
     def __init__(self) -> None:
+        window_type = Qt.WindowType.Tool if sys.platform == "darwin" else Qt.WindowType.Popup
         super().__init__(
             None,
-            Qt.WindowType.Popup
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.NoDropShadowWindowHint,
+            window_type | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint,
         )
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, False)
         self.setFixedWidth(300)
+        self._ignore_outside_until = 0.0
+        self._mouse_monitor = None
+        if sys.platform == "darwin":
+            self.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
+            self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
+            self._outside_clicked.connect(self._on_global_mouse_down)
 
         self._track = QLabel("Code Radio")
         self._track.setObjectName("track_label")
@@ -220,22 +235,96 @@ class TrayPopup(QWidget):
         screen = QGuiApplication.screenAt(global_pos) or QGuiApplication.primaryScreen()
         if screen is None:
             self.move(global_pos)
-            self.show()
-            self.raise_()
-            self.activateWindow()
-            return
-        geo = screen.availableGeometry()
-        w, h = self.width(), self.height()
-        gap = 10
-        x = min(max(global_pos.x() - w // 2, geo.left()), geo.left() + geo.width() - w)
-        y = global_pos.y() - h - gap
-        if y < geo.top():
-            y = global_pos.y() + gap
-        if y + h > geo.top() + geo.height():
-            y = geo.top() + geo.height() - h
-        if y < geo.top():
-            y = geo.top()
-        self.move(x, y)
+        else:
+            geo = screen.availableGeometry()
+            w, h = self.width(), self.height()
+            gap = 10
+            x = min(max(global_pos.x() - w // 2, geo.left()), geo.left() + geo.width() - w)
+            y = global_pos.y() - h - gap
+            if y < geo.top():
+                y = global_pos.y() + gap
+            if y + h > geo.top() + geo.height():
+                y = geo.top() + geo.height() - h
+            if y < geo.top():
+                y = geo.top()
+            self.move(x, y)
+        self._arm_outside_click_guard()
+        if sys.platform == "darwin":
+            # A menu-bar accessory can still be inactive on its first open.
+            # activateWindow() alone then lets the first content click get consumed
+            # as application activation instead of delivering it to a control.
+            platform_mac.activate_app()
         self.show()
         self.raise_()
         self.activateWindow()
+
+    def _arm_outside_click_guard(self) -> None:
+        if sys.platform == "darwin":
+            app = QApplication.instance()
+            if app is not None:
+                app.installEventFilter(self)
+            self._mouse_monitor = platform_mac.monitor_mouse_down(self._outside_clicked.emit)
+            return
+        self._ignore_outside_until = time.monotonic() + OUTSIDE_CLICK_GUARD_MS / 1000.0
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
+
+    def _disarm_outside_click_guard(self) -> None:
+        self._ignore_outside_until = 0.0
+        platform_mac.stop_monitor(self._mouse_monitor)
+        self._mouse_monitor = None
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
+
+    def _child_popup_open(self) -> bool:
+        """True while a nested Qt popup (e.g. QComboBox list) is open."""
+        return QApplication.activePopupWidget() is not None
+
+    def _on_global_mouse_down(self) -> None:
+        """Ignore native monitor callbacks for clicks that landed in the panel."""
+        if (
+            self.isVisible()
+            and not self._child_popup_open()
+            and not self.frameGeometry().contains(QCursor.pos())
+        ):
+            self.hide()
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        if (
+            sys.platform == "darwin"
+            and self.isVisible()
+            and not self._child_popup_open()
+            and event.type() == QEvent.Type.MouseButtonPress
+            and isinstance(event, QMouseEvent)
+            and not self.frameGeometry().contains(event.globalPosition().toPoint())
+        ):
+            self.hide()
+            return False
+        if (
+            self.isVisible()
+            and self._ignore_outside_until
+            and time.monotonic() < self._ignore_outside_until
+            and event.type()
+            in (
+                QEvent.Type.MouseButtonPress,
+                QEvent.Type.MouseButtonRelease,
+                QEvent.Type.MouseButtonDblClick,
+            )
+            and isinstance(event, QMouseEvent)
+        ):
+            point = event.globalPosition().toPoint()
+            if not self.frameGeometry().contains(point):
+                return True
+        return super().eventFilter(watched, event)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() == Qt.Key.Key_Escape:
+            self.hide()
+            return
+        super().keyPressEvent(event)
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        self._disarm_outside_click_guard()
+        super().hideEvent(event)

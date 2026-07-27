@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+import sys
+from unittest.mock import patch
+
+import pytest
+from PySide6.QtCore import QEvent, QPoint, Qt
+from PySide6.QtGui import QKeyEvent
 
 from coderadio_tray.ui.popup import TrayPopup
 
@@ -34,3 +39,49 @@ def test_popup_volume_label_updates(qapp):
     popup = TrayPopup()
     popup.set_volume(42)
     assert popup._vol_label.text() == "42%"
+
+
+def test_popup_escape_hides(qapp):
+    popup = TrayPopup()
+    popup.popup_at(QPoint(200, 200))
+    assert popup.isVisible()
+    event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier)
+    popup.keyPressEvent(event)
+    assert not popup.isVisible()
+
+
+def test_popup_window_type_matches_platform(qapp):
+    popup = TrayPopup()
+    flags = int(popup.windowFlags())
+    if sys.platform == "darwin":
+        # Qt.Tool includes the Popup bit in its enum value; assert Tool specifically.
+        assert flags & int(Qt.WindowType.Tool) == int(Qt.WindowType.Tool)
+    else:
+        assert flags & int(Qt.WindowType.Popup) == int(Qt.WindowType.Popup)
+        assert flags & int(Qt.WindowType.Tool) != int(Qt.WindowType.Tool)
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS-specific activation")
+@patch("coderadio_tray.ui.popup.platform_mac.activate_app")
+def test_popup_at_activates_the_macos_accessory_app(activate, qapp):
+    popup = TrayPopup()
+    popup.popup_at(QPoint(200, 200))
+    try:
+        activate.assert_called_once_with()
+    finally:
+        popup.hide()
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="macOS-specific mouse monitor")
+def test_global_monitor_does_not_close_for_a_click_inside_the_panel(qapp):
+    popup = TrayPopup()
+    popup.popup_at(QPoint(200, 200))
+    try:
+        with patch(
+            "coderadio_tray.ui.popup.QCursor.pos",
+            return_value=popup.frameGeometry().center(),
+        ):
+            popup._outside_clicked.emit()
+        assert popup.isVisible()
+    finally:
+        popup.hide()
