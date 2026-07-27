@@ -95,17 +95,21 @@ ONEDIR="${ROOT}/dist/CodeRadioTray"
 if [[ -d "$APP_DIR" ]]; then
   bundle_mpv "${APP_DIR}/Contents/MacOS"
   PLIST="${APP_DIR}/Contents/Info.plist"
+  VERSION=$("$PYTHON" -c "from coderadio_tray import __version__; print(__version__)")
   if [[ -f "$PLIST" ]] && command -v /usr/libexec/PlistBuddy >/dev/null 2>&1; then
     /usr/libexec/PlistBuddy -c "Add :LSUIElement bool true" "$PLIST" 2>/dev/null \
       || /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "$PLIST"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST"
+    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $VERSION" "$PLIST" 2>/dev/null \
+      || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $VERSION" "$PLIST"
   fi
   codesign --force --deep -s - "$APP_DIR" 2>/dev/null || true
-  echo "App bundle OK: $APP_DIR"
+  echo "App bundle OK: $APP_DIR (version $VERSION)"
 
   # Wrap the .app into a compressed DMG with an /Applications symlink so the
   # release artifact is a single file users can drag-and-drop install.
   echo "[5/5] Creating compressed DMG ..."
-  VERSION=$("$PYTHON" -c "from coderadio_tray import __version__; print(__version__)")
   DMG="${ROOT}/dist/CodeRadioTray-${VERSION}-macos.dmg"
   DMG_WORK="$(mktemp -d)"
   STAGING="${DMG_WORK}/staging"

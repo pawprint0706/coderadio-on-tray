@@ -77,6 +77,10 @@ Settings: OS config dir → `coderadio-on-tray/config.json`
 
 Hard requirement from the design docs: end users run a bundled folder/app **without** installing Python or mpv.
 
+Pushing a version tag (`v*`, matching `__version__`) runs [.github/workflows/release.yml](.github/workflows/release.yml):
+macOS DMG + Windows setup.exe are built on GitHub Actions and attached to the GitHub Release
+(with `SHA256SUMS-v*.txt`). Linux stays best-effort from source.
+
 ### Windows
 
 ```powershell

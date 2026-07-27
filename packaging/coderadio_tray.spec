@@ -11,6 +11,18 @@ ICON_ICO = SRC / "coderadio_tray" / "resources" / "icons" / "app.ico"
 ICON_ICNS = SRC / "coderadio_tray" / "resources" / "icons" / "app.icns"
 ICON_SOURCE_DIR = SRC / "coderadio_tray" / "resources" / "icons" / "source"
 
+
+def _app_version() -> str:
+    """Single-source version from ``coderadio_tray.__version__`` (Finder / Get Info)."""
+    init = SRC / "coderadio_tray" / "__init__.py"
+    for line in init.read_text(encoding="utf-8").splitlines():
+        if line.startswith("__version__"):
+            return line.split("=", 1)[1].strip().strip("\"'")
+    raise RuntimeError(f"__version__ not found in {init}")
+
+
+APP_VERSION = _app_version()
+
 # Do NOT collect_all(PySide6) — that pulls WebEngine/3D/Charts (~700MB+).
 # Hooks for QtCore/Gui/Widgets/Network follow from imports in the app.
 
@@ -127,7 +139,8 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleName": "Code Radio Tray",
             "CFBundleDisplayName": "Code Radio Tray",
-            "CFBundleShortVersionString": "0.4.0",
+            "CFBundleShortVersionString": APP_VERSION,
+            "CFBundleVersion": APP_VERSION,
             "NSHighResolutionCapable": True,
             "LSUIElement": True,
         },

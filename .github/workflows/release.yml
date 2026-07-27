@@ -1,0 +1,143 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Check tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          pip install -e . -q
+          VER=$(python -c "from coderadio_tray import __version__; print(__version__)")
+          if [[ "$TAG" != "$VER" ]]; then
+            echo "Tag v$TAG does not match __version__=$VER" >&2
+            exit 1
+          fi
+          echo "version ok: $VER"
+
+      - name: Install Homebrew build deps
+        run: |
+          brew list mpv >/dev/null 2>&1 || brew install mpv
+          brew list dylibbundler >/dev/null 2>&1 || brew install dylibbundler
+
+      - name: Build macOS DMG
+        run: bash scripts/build_macos.sh
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/CodeRadioTray-*-macos.dmg
+          if-no-files-found: error
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Check tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          pip install -e . -q
+          VER=$(python -c "from coderadio_tray import __version__; print(__version__)")
+          if [[ "$TAG" != "$VER" ]]; then
+            echo "Tag v$TAG does not match __version__=$VER" >&2
+            exit 1
+          fi
+          echo "version ok: $VER"
+
+      - name: Install Inno Setup and 7-Zip
+        shell: pwsh
+        run: |
+          choco install innosetup 7zip -y --no-progress
+          Get-Command ISCC.exe -ErrorAction SilentlyContinue | Format-List
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /? | Select-Object -First 3
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: .\scripts\build_windows.ps1
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup
+          path: dist/CodeRadioTray-*-win64-setup.exe
+          if-no-files-found: error
+
+  release:
+    needs: [build-macos, build-windows]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Stage upload files and SHA256SUMS
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p upload
+          find artifacts -type f \( -name '*.dmg' -o -name '*.exe' \) -exec cp -v {} upload/ \;
+          VER="${GITHUB_REF_NAME#v}"
+          (
+            cd upload
+            sha256sum * | tee "../SHA256SUMS-v${VER}.txt"
+          )
+          cp "SHA256SUMS-v${VER}.txt" upload/
+          ls -lh upload
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: upload/*
+          name: v${{ steps.stage.outputs.version }}
+          generate_release_notes: true
+          body: |
+            ## Code Radio on Tray v${{ steps.stage.outputs.version }}
+
+            Unofficial freeCodeCamp Code Radio player for the system tray / menu bar. **Not affiliated with freeCodeCamp.**
+
+            ### Downloads
+            | Platform | Asset | Install |
+            |----------|-------|---------|
+            | **Windows** | `CodeRadioTray-${{ steps.stage.outputs.version }}-win64-setup.exe` | Per-user wizard → `%LOCALAPPDATA%\Programs\CodeRadioTray` (no admin) |
+            | **macOS (Apple Silicon)** | `CodeRadioTray-${{ steps.stage.outputs.version }}-macos.dmg` | Drag to Applications |
+
+            Also attached: `SHA256SUMS-v${{ steps.stage.outputs.version }}.txt`
+
+            ### Notes
+            - Builds are **unsigned** — SmartScreen / Gatekeeper may warn. Prefer verifying SHA256 above.
+            - Linux remains best-effort from source (see `docs/linux-best-effort.md`).
+            - Config lives in the OS app-support folder and is kept on uninstall.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
