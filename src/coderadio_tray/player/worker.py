@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 class PlayerWorker(QObject):
     state_changed = Signal()
     stream_ended = Signal()
+    playback_failed = Signal(str)
     play_request = Signal(str)
     pause_request = Signal()
     resume_request = Signal()
@@ -47,8 +48,9 @@ class PlayerWorker(QObject):
     def _on_play(self, url: str) -> None:
         try:
             self._player.play(url)
-        except Exception:
+        except Exception as exc:
             logger.exception("play failed")
+            self.playback_failed.emit(str(exc))
         self.state_changed.emit()
 
     @Slot()

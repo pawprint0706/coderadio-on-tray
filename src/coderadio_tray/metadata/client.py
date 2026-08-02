@@ -7,6 +7,20 @@ import httpx
 from coderadio_tray.config import NOWPLAYING_URL, USER_AGENT
 
 
+def _clean(value: object) -> str:
+    text = str(value or "").strip()
+    return "" if text.casefold() == "unknown" else text
+
+
+def _split_song_text(text: str) -> tuple[str, str]:
+    """Extract missing fields from AzuraCast's conventional display text."""
+    for separator in (" — ", " – ", " - "):
+        if separator in text:
+            artist, title = text.split(separator, 1)
+            return _clean(artist), _clean(title)
+    return "", ""
+
+
 @dataclass(frozen=True)
 class TrackInfo:
     title: str = "Unknown"
@@ -17,9 +31,19 @@ class TrackInfo:
 
     @property
     def display(self) -> str:
-        if self.artist and self.artist != "Unknown" and self.title:
-            return f"{self.artist} — {self.title}"
-        return self.text or self.title or "Unknown"
+        artist = _clean(self.artist)
+        title = _clean(self.title)
+        if artist and title:
+            return f"{artist} — {title}"
+        if title:
+            return title
+        if artist:
+            return artist
+
+        text = _clean(self.text)
+        if text[:1] in {"-", "—", "–"}:
+            text = text[1:].strip()
+        return text or "Unknown"
 
 
 @dataclass(frozen=True)
@@ -29,6 +53,7 @@ class StationSnapshot:
     stream_128: str
     stream_64: str
     listen_url: str
+    listeners_current: int = 0
 
     def stream_for_bitrate(self, bitrate: str) -> str:
         if bitrate == "64" and self.stream_64:
@@ -38,12 +63,18 @@ class StationSnapshot:
 
 def _song_from(payload: dict | None) -> TrackInfo:
     song = (payload or {}).get("song") or {}
+    text = _clean(song.get("text"))
+    artist = _clean(song.get("artist"))
+    title = _clean(song.get("title"))
+    text_artist, text_title = _split_song_text(text)
+    artist = artist or text_artist
+    title = title or text_title
     return TrackInfo(
-        title=str(song.get("title") or "Unknown"),
-        artist=str(song.get("artist") or "Unknown"),
-        album=str(song.get("album") or ""),
-        art_url=str(song.get("art") or ""),
-        text=str(song.get("text") or ""),
+        title=title or "Unknown",
+        artist=artist or "Unknown",
+        album=_clean(song.get("album")),
+        art_url=_clean(song.get("art")),
+        text=text or "Unknown",
     )
 
 
@@ -83,10 +114,16 @@ class MetadataClient:
         data = response.json()
         station = data.get("station") or {}
         now = data.get("now_playing") or {}
+        listeners = data.get("listeners") or {}
+        try:
+            listeners_current = max(0, int(listeners.get("current") or 0))
+        except (TypeError, ValueError):
+            listeners_current = 0
         return StationSnapshot(
             is_online=bool(data.get("is_online", True)),
             track=_song_from(now),
             stream_128=_mount_url(station, prefer_low=False),
             stream_64=_mount_url(station, prefer_low=True),
             listen_url=str(station.get("listen_url") or ""),
+            listeners_current=listeners_current,
         )

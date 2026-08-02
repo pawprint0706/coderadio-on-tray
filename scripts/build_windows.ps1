@@ -54,11 +54,9 @@ Write-Host "Installing package + PyInstaller ..."
 & $VenvPython -m pip install -q -e ".[dev]"
 
 $MpvSrc = Join-Path $Root ".tools\mpv\extract\mpv.exe"
-if (-not (Test-Path $MpvSrc)) {
-    $Fetch = Join-Path $PSScriptRoot "fetch_mpv_windows.ps1"
-    Write-Host "mpv not found at $MpvSrc — running fetch script ..."
-    & $Fetch
-}
+$Fetch = Join-Path $PSScriptRoot "fetch_mpv_windows.ps1"
+Write-Host "Validating pinned Windows mpv ..."
+& $Fetch
 if (-not (Test-Path $MpvSrc)) {
     throw "mpv.exe missing. Place it at .tools\mpv\extract\mpv.exe or run scripts\fetch_mpv_windows.ps1"
 }

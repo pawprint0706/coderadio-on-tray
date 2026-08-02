@@ -20,7 +20,10 @@ class TrayController(QObject):
         self.tray = QSystemTrayIcon(make_tray_icon(playing=False), self)
         self.tray.setToolTip("Code Radio")
         self.tray.activated.connect(self._on_activated)
+        self.tray.messageClicked.connect(self._on_message_clicked)
         self._left_click_handler = lambda: None
+        self._message_click_handler = None
+        self._left_click_action = "toggle"
         self._hint_shown = not first_run
         self._on_hint_shown = on_hint_shown
         self._playing = False
@@ -108,6 +111,24 @@ class TrayController(QObject):
     def set_tooltip(self, text: str) -> None:
         self.tray.setToolTip(text)
 
+    def set_left_click_action(self, action: str) -> None:
+        self._left_click_action = action if action in {"toggle", "popup"} else "toggle"
+
+    def show_message(self, title: str, message: str, on_click=None) -> None:
+        self._message_click_handler = on_click
+        self.tray.showMessage(
+            title,
+            message,
+            QSystemTrayIcon.MessageIcon.Information,
+            7000,
+        )
+
+    def _on_message_clicked(self) -> None:
+        handler = self._message_click_handler
+        self._message_click_handler = None
+        if handler is not None:
+            handler()
+
     def _popup_anchor(self) -> QPoint:
         # Anchor to the tray icon geometry so the popup opens at a fixed spot
         # under the icon (matching Windows) instead of at the click point, which
@@ -121,7 +142,10 @@ class TrayController(QObject):
         if reason == QSystemTrayIcon.ActivationReason.Context:
             self.popup.popup_at(self._popup_anchor())
         elif reason == QSystemTrayIcon.ActivationReason.Trigger:
-            self._left_click_handler()
+            if self._left_click_action == "popup":
+                self.popup.popup_at(self._popup_anchor())
+            else:
+                self._left_click_handler()
 
     def on_left_click(self, handler) -> None:
         self._left_click_handler = handler

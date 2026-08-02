@@ -19,6 +19,16 @@ def test_config_clamp_low() -> None:
     assert cfg.poll_seconds == 120
 
 
+def test_config_clamp_new_preferences() -> None:
+    cfg = AppConfig(tray_click_action="invalid").clamp()
+
+    assert cfg.auto_play is True
+    assert cfg.notify_updates is True
+    assert cfg.show_album_art is True
+    assert cfg.show_listener_count is True
+    assert cfg.tray_click_action == "toggle"
+
+
 def test_stream_for_bitrate() -> None:
     snap = StationSnapshot(
         is_online=True,

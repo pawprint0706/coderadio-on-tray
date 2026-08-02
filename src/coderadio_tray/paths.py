@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -26,7 +27,12 @@ def mpv_binary_name() -> str:
 
 
 def iter_mpv_candidates(configured: str = "mpv") -> list[Path]:
-    """Ordered search paths for a bundled or configured mpv binary."""
+    """Ordered mpv candidates for development or a frozen release.
+
+    Development prefers an explicitly configured path, then the active PATH,
+    and only then repository-local caches. Frozen releases prefer their bundled
+    binary and deliberately do not depend on a system installation.
+    """
     name = mpv_binary_name()
     out: list[Path] = []
 
@@ -34,23 +40,35 @@ def iter_mpv_candidates(configured: str = "mpv") -> list[Path]:
         out.append(Path(configured))
 
     base = app_dir()
-    out.extend(
-        [
-            base / "mpv" / name,
-            base / name,
-        ]
-    )
-
-    meipass = meipass_dir()
-    if meipass is not None:
+    if is_frozen():
         out.extend(
             [
-                meipass / "mpv" / name,
-                meipass / name,
+                base / "mpv" / name,
+                base / name,
+            ]
+        )
+        meipass = meipass_dir()
+        if meipass is not None:
+            out.extend(
+                [
+                    meipass / "mpv" / name,
+                    meipass / name,
+                ]
+            )
+    else:
+        found = shutil.which(configured) or shutil.which("mpv.exe") or shutil.which("mpv")
+        if found:
+            out.append(Path(found))
+        out.extend(
+            [
+                base / "mpv" / name,
+                base / name,
+                base / ".tools" / "mpv" / "extract" / name,
             ]
         )
 
-    if not is_frozen():
-        out.append(base / ".tools" / "mpv" / "extract" / name)
-
-    return out
+    unique: list[Path] = []
+    for candidate in out:
+        if candidate not in unique:
+            unique.append(candidate)
+    return unique

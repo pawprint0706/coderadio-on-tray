@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import queue
-import shutil
 import socket
 import subprocess
 import sys
@@ -145,18 +144,42 @@ class MpvPlayer:
     def _resolve_mpv(mpv_path: str) -> str:
         from coderadio_tray.paths import iter_mpv_candidates
 
+        rejected: list[str] = []
         for candidate in iter_mpv_candidates(mpv_path):
-            if candidate.is_file():
+            if not candidate.is_file():
+                continue
+            valid, detail = MpvPlayer._probe_mpv(candidate)
+            if valid:
+                logger.info("using mpv: %s (%s)", candidate, detail)
                 return str(candidate)
-        found = shutil.which(mpv_path) or shutil.which("mpv.exe") or shutil.which("mpv")
-        if not found:
-            raise MpvNotFoundError(
-                "mpv was not found. For releases it should be bundled next to the "
-                "app as mpv/mpv(.exe). For development, install mpv on PATH "
-                "(e.g. winget install shinchiro.mpv), place it under "
-                ".tools/mpv/extract/, or set config mpv_path."
+            rejected.append(f"{candidate}: {detail}")
+            logger.warning("ignoring unusable mpv candidate %s: %s", candidate, detail)
+        detail = f" Rejected candidates: {'; '.join(rejected)}" if rejected else ""
+        raise MpvNotFoundError(
+            "No runnable mpv was found. For releases it should be bundled next to the "
+            "app as mpv/mpv(.exe). For development, install mpv on PATH "
+            "(e.g. brew install mpv or winget install shinchiro.mpv), refresh the "
+            f".tools cache, or set config mpv_path.{detail}"
+        )
+
+    @staticmethod
+    def _probe_mpv(candidate: Path) -> tuple[bool, str]:
+        creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+        try:
+            result = subprocess.run(
+                [str(candidate), "--version"],
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                timeout=5,
+                creationflags=creationflags,
+                check=False,
+                text=True,
             )
-        return found
+        except (OSError, subprocess.SubprocessError) as exc:
+            return False, str(exc)
+        output = (result.stdout or result.stderr).strip().splitlines()
+        summary = output[0] if output else f"exit code {result.returncode}"
+        return result.returncode == 0, summary
 
     @staticmethod
     def _make_ipc_path() -> str:
@@ -202,6 +225,10 @@ class MpvPlayer:
         deadline = time.time() + timeout
         last_err: Exception | None = None
         while time.time() < deadline:
+            if self._proc is not None and self._proc.poll() is not None:
+                code = self._proc.returncode
+                self._proc = None
+                raise RuntimeError(f"mpv exited during startup with code {code}")
             try:
                 self._connect()
                 return

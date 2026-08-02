@@ -21,6 +21,17 @@ def test_iter_mpv_candidates_non_frozen(monkeypatch, tmp_path):
     assert not any("MEIPASS" in str(c) or "_MEIPASS" in str(c) for c in cands)
 
 
+def test_non_frozen_prefers_path_before_tools(monkeypatch):
+    monkeypatch.delattr(sys, "frozen", raising=False)
+    system_mpv = Path("/system/bin/mpv")
+    monkeypatch.setattr(paths.shutil, "which", lambda _name: str(system_mpv))
+
+    cands = paths.iter_mpv_candidates("mpv")
+
+    tools_index = next(index for index, candidate in enumerate(cands) if ".tools" in str(candidate))
+    assert cands.index(system_mpv) < tools_index
+
+
 def test_iter_mpv_candidates_custom_path_first(monkeypatch, tmp_path):
     monkeypatch.delattr(sys, "frozen", raising=False)
     custom = tmp_path / "custom-mpv"

@@ -11,6 +11,8 @@ from coderadio_tray import __version__
 APP_NAME = "coderadio-on-tray"
 NOWPLAYING_URL = "https://coderadio-admin-v2.freecodecamp.org/api/nowplaying/coderadio"
 OFFICIAL_SITE = "https://coderadio.freecodecamp.org/"
+RELEASES_URL = "https://github.com/pawprint0706/coderadio-on-tray/releases"
+LATEST_RELEASE_API = "https://api.github.com/repos/pawprint0706/coderadio-on-tray/releases/latest"
 USER_AGENT = f"{APP_NAME}/{__version__} (+unofficial; {OFFICIAL_SITE})"
 DEFAULT_POLL_SECONDS = 15
 
@@ -38,6 +40,12 @@ class AppConfig:
     poll_seconds: int = DEFAULT_POLL_SECONDS
     mpv_path: str = "mpv"
     first_run_hint_shown: bool = False
+    auto_start_login: bool = False
+    auto_play: bool = True
+    notify_updates: bool = True
+    show_album_art: bool = True
+    show_listener_count: bool = True
+    tray_click_action: str = "toggle"  # "toggle" or "popup"
 
     def clamp(self) -> AppConfig:
         self.volume = max(0, min(100, int(self.volume)))
@@ -45,6 +53,13 @@ class AppConfig:
             self.bitrate = "128"
         self.poll_seconds = max(5, min(120, int(self.poll_seconds)))
         self.first_run_hint_shown = bool(self.first_run_hint_shown)
+        self.auto_start_login = bool(self.auto_start_login)
+        self.auto_play = bool(self.auto_play)
+        self.notify_updates = bool(self.notify_updates)
+        self.show_album_art = bool(self.show_album_art)
+        self.show_listener_count = bool(self.show_listener_count)
+        if self.tray_click_action not in {"toggle", "popup"}:
+            self.tray_click_action = "toggle"
         return self
 
 

@@ -1,18 +1,28 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Download a portable mpv.exe into .tools/mpv/extract/ for bundling.
+  Fetch the pinned, checksummed portable mpv.exe used for Windows builds.
 #>
 $ErrorActionPreference = "Stop"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
+$PolicyPath = Join-Path $Root "packaging\mpv-versions.json"
+$Policy = (Get-Content -Raw $PolicyPath | ConvertFrom-Json).windows
 $DestDir = Join-Path $Root ".tools\mpv\extract"
 $ArchiveDir = Join-Path $Root ".tools\mpv"
 New-Item -ItemType Directory -Force -Path $DestDir, $ArchiveDir | Out-Null
 
 $Existing = Join-Path $DestDir "mpv.exe"
-if (Test-Path $Existing) {
-    Write-Host "Already present: $Existing"
-    exit 0
+$Marker = Join-Path $DestDir "mpv-version.json"
+if ((Test-Path $Existing) -and (Test-Path $Marker)) {
+    $Cached = Get-Content -Raw $Marker | ConvertFrom-Json
+    if ($Cached.version -eq $Policy.version -and $Cached.sha256 -eq $Policy.sha256) {
+        & $Existing --version *> $null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Using validated cached mpv $($Policy.version): $Existing"
+            exit 0
+        }
+        Write-Warning "Cached mpv cannot run; refreshing it."
+    }
 }
 
 $SevenZip = @(
@@ -30,19 +40,21 @@ if (-not $SevenZip) {
 }
 if (-not $SevenZip) { throw "7-Zip is required to extract mpv (mpv-*.7z)." }
 
-Write-Host "Resolving latest shinchiro mpv-x86_64 asset ..."
-$Release = Invoke-RestMethod -Uri "https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest" -Headers @{
-    "User-Agent" = "coderadio-on-tray-build"
+$Archive = Join-Path $ArchiveDir $Policy.archive
+$ArchiveValid = $false
+if (Test-Path $Archive) {
+    $ArchiveHash = (Get-FileHash $Archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    $ArchiveValid = $ArchiveHash -eq $Policy.sha256
 }
-$Asset = $Release.assets | Where-Object { $_.name -match '^mpv-x86_64-\d{8}-git-.*\.7z$' -and $_.name -notmatch 'v3|dev' } | Select-Object -First 1
-if (-not $Asset) {
-    $Asset = $Release.assets | Where-Object { $_.name -like 'mpv-x86_64-*.7z' -and $_.name -notmatch 'dev' } | Select-Object -First 1
+if (-not $ArchiveValid) {
+    Write-Host "Downloading pinned mpv $($Policy.version) ..."
+    Invoke-WebRequest -Uri $Policy.url -OutFile $Archive -UseBasicParsing
 }
-if (-not $Asset) { throw "Could not find mpv-x86_64 *.7z in latest release." }
-
-$Archive = Join-Path $ArchiveDir $Asset.name
-Write-Host "Downloading $($Asset.name) ..."
-Invoke-WebRequest -Uri $Asset.browser_download_url -OutFile $Archive -UseBasicParsing
+$ArchiveHash = (Get-FileHash $Archive -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($ArchiveHash -ne $Policy.sha256) {
+    throw "mpv archive SHA256 mismatch. Expected $($Policy.sha256), got $ArchiveHash"
+}
+Write-Host "Verified SHA256: $ArchiveHash"
 
 $ExtractTmp = Join-Path $ArchiveDir "_extract_tmp"
 if (Test-Path $ExtractTmp) { Remove-Item -Recurse -Force $ExtractTmp }
@@ -51,9 +63,16 @@ New-Item -ItemType Directory -Force -Path $ExtractTmp | Out-Null
 
 $Found = Get-ChildItem $ExtractTmp -Recurse -Filter mpv.exe | Select-Object -First 1
 if (-not $Found) { throw "mpv.exe not found inside archive." }
+Remove-Item -Force -ErrorAction SilentlyContinue $Existing, $Marker, (Join-Path $DestDir "d3dcompiler_43.dll")
 Copy-Item -Force $Found.FullName (Join-Path $DestDir "mpv.exe")
 $Dll = Get-ChildItem $ExtractTmp -Recurse -Filter d3dcompiler_43.dll | Select-Object -First 1
 if ($Dll) { Copy-Item -Force $Dll.FullName (Join-Path $DestDir "d3dcompiler_43.dll") }
 
 Remove-Item -Recurse -Force $ExtractTmp
-Write-Host "mpv ready: $(Join-Path $DestDir 'mpv.exe')"
+& $Existing --version *> $null
+if ($LASTEXITCODE -ne 0) { throw "Downloaded mpv.exe failed its --version probe." }
+@{
+    version = [string]$Policy.version
+    sha256 = [string]$Policy.sha256
+} | ConvertTo-Json | Set-Content -Encoding UTF8 $Marker
+Write-Host "mpv $($Policy.version) ready: $Existing"

@@ -123,3 +123,68 @@ def test_bitrate_change_while_paused_does_not_start_playback(monkeypatch) -> Non
 
     assert app._stream_url == "https://example/low.mp3"
     assert starts == []
+
+
+def test_initial_metadata_respects_disabled_startup_playback() -> None:
+    class Player:
+        @staticmethod
+        def is_playing() -> bool:
+            return False
+
+        @staticmethod
+        def is_paused() -> bool:
+            return False
+
+    class Popup:
+        @staticmethod
+        def set_listener_count(_count: int) -> None:
+            pass
+
+    app = _bare_app()
+    app._config = AppConfig(auto_play=False)
+    app._snapshot = None
+    app._track = TrackInfo()
+    app._stream_url = ""
+    app._error = None
+    app._pending_bitrate = None
+    app._auto_started = False
+    app._playback_requested = False
+    app._player_worker = Player()
+    app._popup = Popup()
+    app._update_artwork = lambda _url: None
+    app._update_ui = lambda: None
+    starts: list[bool] = []
+    app._start_playback = lambda: starts.append(True)
+    snapshot = StationSnapshot(
+        is_online=True,
+        track=TrackInfo(title="Title", artist="Artist"),
+        stream_128="https://example/radio.mp3",
+        stream_64="https://example/low.mp3",
+        listen_url="https://example/listen",
+        listeners_current=10,
+    )
+
+    app._on_metadata(snapshot)
+
+    assert app._auto_started is True
+    assert app._playback_requested is False
+    assert starts == []
+
+
+def test_playback_failure_clears_requested_state_and_surfaces_error() -> None:
+    app = _bare_app()
+    app._playback_requested = True
+    app._user_paused = False
+    app._playback_error = None
+    cancellations: list[bool] = []
+    updates: list[bool] = []
+    app._cancel_reconnect = lambda: cancellations.append(True)
+    app._update_ui = lambda: updates.append(True)
+
+    app._on_playback_failed("mpv exited during startup")
+
+    assert app._playback_requested is False
+    assert app._user_paused is False
+    assert app._playback_error == "Playback failed: mpv exited during startup"
+    assert cancellations == [True]
+    assert updates == [True]

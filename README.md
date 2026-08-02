@@ -26,6 +26,11 @@ main app icon show the complete mark; paused/stopped shows its two original brac
 with the center campfire removed. freeCodeCamp and its logo are trademarks of the
 freeCodeCamp organization; this remains an unofficial, unaffiliated client.
 
+Development validates mpv with `mpv --version` and resolves it in this order:
+an explicit `mpv_path`, the active `PATH`, then the `.tools` cache. Release builds use
+the pinned policy in `packaging/mpv-versions.json`; Windows verifies the archive SHA256,
+while macOS verifies the pinned Homebrew formula revision (Homebrew verifies its bottle SHA256).
+
 ## Run (development)
 
 ```powershell
@@ -68,10 +73,14 @@ taskkill /IM pythonw.exe /F
 | Tray left click | Play / Pause |
 | Tray right click | Non-modal popup (track, volume, bitrate, quit) |
 
-Auto-starts playback after the first successful metadata fetch. Only one instance is allowed.
+The popup shows album artwork and the current listener count when available. Its Settings page
+controls login startup, startup playback, GitHub release notifications, artwork/listener
+visibility, and whether tray/menu-bar left click toggles playback or opens the popup.
+
+By default, playback starts after the first successful metadata fetch. Only one instance is allowed.
 
 Settings: OS config dir → `coderadio-on-tray/config.json`  
-(volume, bitrate, poll interval, first-run hint flag, optional `mpv_path`).
+(volume, bitrate, poll interval, UI/startup preferences, first-run hint flag, optional `mpv_path`).
 
 ## Standalone release (no Python install)
 

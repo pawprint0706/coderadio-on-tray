@@ -3,10 +3,11 @@ from __future__ import annotations
 import sys
 import time
 
-from PySide6.QtCore import QEvent, Qt, Signal
-from PySide6.QtGui import QColor, QCursor, QGuiApplication, QMouseEvent
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QCursor, QGuiApplication, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QFrame,
     QGraphicsDropShadowEffect,
@@ -14,11 +15,13 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QSlider,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from coderadio_tray import platform_mac
+from coderadio_tray.config import AppConfig
 
 # Non-macOS Qt.Popup windows need to swallow the tray interaction briefly.
 OUTSIDE_CLICK_GUARD_MS = 300
@@ -36,6 +39,7 @@ class TrayPopup(QWidget):
     bitrate_changed = Signal(str)
     open_site_clicked = Signal()
     quit_clicked = Signal()
+    settings_changed = Signal(object)
     _outside_clicked = Signal()
 
     def __init__(self) -> None:
@@ -49,6 +53,10 @@ class TrayPopup(QWidget):
         self.setFixedWidth(POPUP_WIDTH + 2 * SHADOW_MARGIN)
         self._ignore_outside_until = 0.0
         self._mouse_monitor = None
+        self._last_anchor = None
+        self._loading_settings = False
+        self._album_art_enabled = True
+        self._album_art_has_image = False
         if sys.platform == "darwin":
             self.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
             self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint, True)
@@ -67,9 +75,17 @@ class TrayPopup(QWidget):
         self._panel.setGraphicsEffect(shadow)
         outer.addWidget(self._panel)
 
+        self._album_art = QLabel("No Album Art")
+        self._album_art.setObjectName("album_art")
+        self._album_art.setFixedSize(180, 180)
+        self._album_art.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         self._track = QLabel("Code Radio")
         self._track.setObjectName("track_label")
         self._track.setWordWrap(True)
+
+        self._listeners = QLabel("Listeners: 0")
+        self._listeners.setObjectName("listeners_label")
 
         self._status = QLabel("Stopped")
         self._status.setObjectName("status_label")
@@ -91,10 +107,12 @@ class TrayPopup(QWidget):
         self._bitrate.addItem("64 kbps", "64")
         self._bitrate.currentIndexChanged.connect(self._on_bitrate)
 
-        site_btn = QPushButton("Open site")
-        site_btn.clicked.connect(self.open_site_clicked.emit)
-        quit_btn = QPushButton("Quit")
-        quit_btn.clicked.connect(self.quit_clicked.emit)
+        self._settings_btn = QPushButton("Settings")
+        self._settings_btn.clicked.connect(self.show_settings_page)
+        self._site_btn = QPushButton("Site")
+        self._site_btn.clicked.connect(self.open_site_clicked.emit)
+        self._quit_btn = QPushButton("Quit")
+        self._quit_btn.clicked.connect(self.quit_clicked.emit)
 
         vol_row = QHBoxLayout()
         vol_row.addWidget(QLabel("Vol"))
@@ -106,23 +124,97 @@ class TrayPopup(QWidget):
         btn_row.addWidget(self._bitrate)
 
         foot = QHBoxLayout()
-        foot.addWidget(site_btn)
+        foot.addWidget(self._settings_btn)
+        foot.addWidget(self._site_btn)
         foot.addStretch(1)
-        foot.addWidget(quit_btn)
+        foot.addWidget(self._quit_btn)
+
+        self._playback_page = QWidget()
+        playback_root = QVBoxLayout(self._playback_page)
+        playback_root.setContentsMargins(0, 0, 0, 0)
+        playback_root.setSpacing(8)
+        playback_root.addWidget(self._album_art, alignment=Qt.AlignmentFlag.AlignHCenter)
+        playback_root.addWidget(self._track)
+        playback_root.addWidget(self._listeners)
+        playback_root.addWidget(self._status)
+        playback_root.addLayout(vol_row)
+        playback_root.addLayout(btn_row)
+        playback_root.addLayout(foot)
+
+        self._auto_start_login = QCheckBox("Start automatically at login")
+        self._auto_play = QCheckBox("Play automatically when the app starts")
+        self._notify_updates = QCheckBox("Notify me about new releases")
+        self._show_album_art = QCheckBox("Show album art")
+        self._show_listener_count = QCheckBox("Show listener count")
+        for checkbox in (
+            self._auto_start_login,
+            self._auto_play,
+            self._notify_updates,
+            self._show_album_art,
+            self._show_listener_count,
+        ):
+            checkbox.toggled.connect(self._emit_settings)
+
+        self._tray_click_action = QComboBox()
+        self._tray_click_action.addItem("Play / Pause", "toggle")
+        self._tray_click_action.addItem("Open popup", "popup")
+        self._tray_click_action.currentIndexChanged.connect(self._emit_settings)
+
+        self._settings_status = QLabel("")
+        self._settings_status.setObjectName("settings_status")
+        self._settings_status.setWordWrap(True)
+        self._back_btn = QPushButton("Back")
+        self._back_btn.clicked.connect(self.show_playback_page)
+
+        self._settings_page = QWidget()
+        settings_root = QVBoxLayout(self._settings_page)
+        # macOS applies asymmetric native layout-item margins to controls.
+        # Use widget rectangles with matching explicit side margins so the
+        # visible right edge aligns with the existing left inset.
+        settings_root.setContentsMargins(2, 0, 2, 0)
+        settings_root.setSpacing(8)
+        settings_title = QLabel("Settings")
+        settings_title.setObjectName("settings_title")
+        tray_click_label = QLabel("Tray / menu-bar left click")
+        for widget in (
+            settings_title,
+            self._auto_start_login,
+            self._auto_play,
+            self._show_album_art,
+            self._show_listener_count,
+            tray_click_label,
+            self._tray_click_action,
+            self._notify_updates,
+            self._settings_status,
+            self._back_btn,
+        ):
+            widget.setAttribute(Qt.WidgetAttribute.WA_LayoutUsesWidgetRect)
+        settings_root.addWidget(settings_title)
+        settings_root.addWidget(self._auto_start_login)
+        settings_root.addWidget(self._auto_play)
+        settings_root.addWidget(self._show_album_art)
+        settings_root.addWidget(self._show_listener_count)
+        settings_root.addWidget(tray_click_label)
+        settings_root.addWidget(self._tray_click_action)
+        settings_root.addWidget(self._notify_updates)
+        settings_root.addWidget(self._settings_status)
+        settings_root.addStretch(1)
+        settings_root.addWidget(self._back_btn)
+
+        self._pages = QStackedWidget()
+        self._pages.addWidget(self._playback_page)
+        self._pages.addWidget(self._settings_page)
 
         root = QVBoxLayout(self._panel)
         root.setContentsMargins(12, 12, 12, 12)
-        root.setSpacing(8)
-        root.addWidget(self._track)
-        root.addWidget(self._status)
-        root.addLayout(vol_row)
-        root.addLayout(btn_row)
-        root.addLayout(foot)
+        root.setSpacing(0)
+        root.addWidget(self._pages)
 
         self._volume.valueChanged.connect(lambda v: self._vol_label.setText(f"{v}%"))
 
         self._apply_theme()
         QGuiApplication.styleHints().colorSchemeChanged.connect(self._apply_theme)
+        QTimer.singleShot(0, self._resize_current_page)
 
     def _apply_theme(self, scheme: object = None) -> None:
         if scheme is None:
@@ -147,7 +239,17 @@ class TrayPopup(QWidget):
         }}
         QLabel {{ color: {fg}; }}
         #track_label {{ font-size: 13px; font-weight: 600; }}
-        #status_label {{ color: {status_color}; font-size: 11px; }}
+        #settings_title {{ font-size: 15px; font-weight: 700; }}
+        #status_label, #listeners_label, #settings_status {{
+            color: {status_color}; font-size: 11px;
+        }}
+        #album_art {{
+            background: {btn_bg};
+            color: {status_color};
+            border-radius: 8px;
+            font-size: 12px;
+        }}
+        QCheckBox {{ color: {fg}; spacing: 7px; }}
         QPushButton {{
             background: {btn_bg};
             color: {fg};
@@ -183,6 +285,37 @@ class TrayPopup(QWidget):
     def set_track_text(self, text: str) -> None:
         self._track.setText(text)
 
+    def set_album_art(self, data: bytes | None) -> None:
+        pixmap = QPixmap()
+        loaded = bool(data) and pixmap.loadFromData(data)
+        self._album_art_has_image = loaded
+        if loaded:
+            self._album_art.setText("")
+            self._album_art.setPixmap(
+                pixmap.scaled(
+                    self._album_art.size(),
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
+            )
+        else:
+            self._album_art.clear()
+            self._album_art.setText("No Album Art")
+        self._album_art.setVisible(self._album_art_enabled)
+        self._resize_current_page()
+
+    def set_album_art_visible(self, visible: bool) -> None:
+        self._album_art_enabled = visible
+        self._album_art.setVisible(visible)
+        self._resize_current_page()
+
+    def set_listener_count(self, count: int) -> None:
+        self._listeners.setText(f"Listeners: {max(0, int(count)):,}")
+
+    def set_listener_count_visible(self, visible: bool) -> None:
+        self._listeners.setVisible(visible)
+        self._resize_current_page()
+
     def set_status(self, text: str) -> None:
         self._status.setText(text)
 
@@ -202,8 +335,81 @@ class TrayPopup(QWidget):
             self._bitrate.setCurrentIndex(idx)
         self._bitrate.blockSignals(blocked)
 
+    def set_settings(self, settings: AppConfig) -> None:
+        self._loading_settings = True
+        try:
+            self._auto_start_login.setChecked(settings.auto_start_login)
+            self._auto_play.setChecked(settings.auto_play)
+            self._notify_updates.setChecked(settings.notify_updates)
+            self._show_album_art.setChecked(settings.show_album_art)
+            self._show_listener_count.setChecked(settings.show_listener_count)
+            action = settings.tray_click_action
+            index = self._tray_click_action.findData(action)
+            self._tray_click_action.setCurrentIndex(max(0, index))
+        finally:
+            self._loading_settings = False
+
+    def _emit_settings(self, _value: object = None) -> None:
+        if self._loading_settings:
+            return
+        self.settings_changed.emit(
+            {
+                "auto_start_login": self._auto_start_login.isChecked(),
+                "auto_play": self._auto_play.isChecked(),
+                "notify_updates": self._notify_updates.isChecked(),
+                "show_album_art": self._show_album_art.isChecked(),
+                "show_listener_count": self._show_listener_count.isChecked(),
+                "tray_click_action": str(self._tray_click_action.currentData()),
+            }
+        )
+
+    def set_settings_status(self, text: str) -> None:
+        self._settings_status.setText(text)
+        self._resize_current_page()
+
+    def _resize_current_page(self) -> None:
+        page = self._pages.currentWidget()
+        if page is None:
+            return
+        if page.layout() is not None:
+            page.layout().activate()
+        self._pages.setFixedHeight(page.sizeHint().height())
+        self._panel.layout().activate()
+        self.resize(self.width(), self._panel.sizeHint().height() + 2 * SHADOW_MARGIN)
+        # QStackedWidget updates the parent's minimum size on the next event
+        # turn. Resize once more then so a shorter settings page can shrink
+        # after an artwork-heavy playback page.
+        QTimer.singleShot(0, self._finish_page_resize)
+
+    def _finish_page_resize(self) -> None:
+        self._panel.layout().activate()
+        self.resize(self.width(), self._panel.sizeHint().height() + 2 * SHADOW_MARGIN)
+        if self.isVisible() and self._last_anchor is not None:
+            self._move_to_anchor(self._last_anchor)
+
+    def show_settings_page(self) -> None:
+        self._pages.setCurrentWidget(self._settings_page)
+        self._resize_current_page()
+
+    def show_playback_page(self) -> None:
+        self._pages.setCurrentWidget(self._playback_page)
+        self._resize_current_page()
+
     def popup_at(self, global_pos) -> None:
-        self.adjustSize()
+        self._last_anchor = global_pos
+        self._resize_current_page()
+        self._move_to_anchor(global_pos)
+        self._arm_outside_click_guard()
+        if sys.platform == "darwin":
+            # A menu-bar accessory can still be inactive on its first open.
+            # activateWindow() alone then lets the first content click get consumed
+            # as application activation instead of delivering it to a control.
+            platform_mac.activate_app()
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _move_to_anchor(self, global_pos) -> None:
         screen = QGuiApplication.screenAt(global_pos) or QGuiApplication.primaryScreen()
         if screen is None:
             self.move(global_pos)
@@ -224,15 +430,6 @@ class TrayPopup(QWidget):
             if y < geo.top() - SHADOW_MARGIN:
                 y = geo.top() - SHADOW_MARGIN
             self.move(x, y)
-        self._arm_outside_click_guard()
-        if sys.platform == "darwin":
-            # A menu-bar accessory can still be inactive on its first open.
-            # activateWindow() alone then lets the first content click get consumed
-            # as application activation instead of delivering it to a control.
-            platform_mac.activate_app()
-        self.show()
-        self.raise_()
-        self.activateWindow()
 
     def _arm_outside_click_guard(self) -> None:
         if sys.platform == "darwin":

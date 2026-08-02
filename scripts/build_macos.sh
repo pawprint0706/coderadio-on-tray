@@ -18,19 +18,33 @@ echo "[1/5] Installing package + PyInstaller + macOS extras ..."
 "$PYTHON" -m pip install -q -e ".[dev,macos]"
 
 MPV_SRC="${ROOT}/.tools/mpv/extract/mpv"
-if [[ ! -f "$MPV_SRC" ]]; then
-  if command -v brew >/dev/null 2>&1; then
-    echo "Fetching mpv via Homebrew (copy binary into .tools) ..."
-    brew list mpv >/dev/null 2>&1 || brew install mpv
-    MPV_BREW="$(brew --prefix mpv)/bin/mpv"
-    mkdir -p "$(dirname "$MPV_SRC")"
-    cp "$MPV_BREW" "$MPV_SRC"
-  else
-    echo "mpv not found at $MPV_SRC and Homebrew unavailable." >&2
-    echo "Place a relocatable mpv binary at .tools/mpv/extract/mpv" >&2
-    exit 1
-  fi
+MPV_POLICY="${ROOT}/packaging/mpv-versions.json"
+MPV_FORMULA=$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["macos"]["homebrew_formula"])' "$MPV_POLICY")
+MPV_EXPECTED=$("$PYTHON" -c 'import json,sys; print(json.load(open(sys.argv[1]))["macos"]["formula_version"])' "$MPV_POLICY")
+if ! command -v brew >/dev/null 2>&1; then
+  echo "Homebrew is required to obtain the pinned macOS mpv build." >&2
+  exit 1
 fi
+brew list "$MPV_FORMULA" >/dev/null 2>&1 || brew install "$MPV_FORMULA"
+MPV_ACTUAL=$(brew list --versions "$MPV_FORMULA" | awk '{print $2}')
+if [[ "$MPV_ACTUAL" != "$MPV_EXPECTED" ]]; then
+  echo "Pinned mpv formula mismatch: expected $MPV_EXPECTED, installed $MPV_ACTUAL." >&2
+  echo "Update packaging/mpv-versions.json deliberately before building." >&2
+  exit 1
+fi
+MPV_BREW="$(brew --prefix "$MPV_FORMULA")/bin/mpv"
+if ! "$MPV_BREW" --version >/dev/null 2>&1; then
+  echo "Homebrew mpv failed its --version probe: $MPV_BREW" >&2
+  exit 1
+fi
+mkdir -p "$(dirname "$MPV_SRC")"
+cp "$MPV_BREW" "$MPV_SRC"
+chmod +x "$MPV_SRC"
+if ! "$MPV_SRC" --version >/dev/null 2>&1; then
+  echo "Copied mpv failed its --version probe: $MPV_SRC" >&2
+  exit 1
+fi
+echo "Using pinned Homebrew mpv $MPV_ACTUAL (bottle SHA256 verified by Homebrew)."
 
 # dylibbundler relocates mpv's Homebrew dylibs into the bundle so the app is
 # self-contained. Homebrew install is best-effort (build-time toolchain only).

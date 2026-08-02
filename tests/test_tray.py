@@ -9,9 +9,13 @@ from coderadio_tray.ui.tray import TrayController
 class _PopupStub:
     def __init__(self) -> None:
         self.playing = False
+        self.popup_positions = []
 
     def set_playing(self, playing: bool) -> None:
         self.playing = playing
+
+    def popup_at(self, position) -> None:
+        self.popup_positions.append(position)
 
 
 def test_error_icon_blinks_every_second_and_stops_when_cleared(monkeypatch, qapp):
@@ -37,3 +41,29 @@ def test_error_icon_blinks_every_second_and_stops_when_cleared(monkeypatch, qapp
     controller.set_playing(False, error=False)
     assert not controller._error_blink_timer.isActive()
     assert rendered[-1] == (False, False)
+
+
+def test_left_click_can_open_popup(monkeypatch, qapp):
+    monkeypatch.setattr(tray_module, "make_tray_icon", lambda **_kwargs: QIcon())
+    popup = _PopupStub()
+    controller = TrayController(popup)
+    toggles: list[bool] = []
+    controller.on_left_click(lambda: toggles.append(True))
+    controller.set_left_click_action("popup")
+
+    controller._on_activated(controller.tray.ActivationReason.Trigger)
+
+    assert len(popup.popup_positions) == 1
+    assert toggles == []
+
+
+def test_notification_click_runs_handler(monkeypatch, qapp):
+    monkeypatch.setattr(tray_module, "make_tray_icon", lambda **_kwargs: QIcon())
+    controller = TrayController(_PopupStub())
+    clicks: list[bool] = []
+    controller.show_message("Update", "Available", on_click=lambda: clicks.append(True))
+
+    controller._on_message_clicked()
+    controller._on_message_clicked()
+
+    assert clicks == [True]
