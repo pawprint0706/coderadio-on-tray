@@ -6,7 +6,7 @@ Unofficial [freeCodeCamp Code Radio](https://coderadio.freecodecamp.org/) player
 
 | | |
 |--|--|
-| Version | 0.4.3 |
+| Version | 0.5.0 |
 | Platforms | Windows / macOS (primary), Linux best-effort |
 | Stack | Python 3.11+, PySide6, mpv (JSON IPC) |
 
@@ -128,7 +128,7 @@ Edge/Chrome download warnings are expected for a new/unsigned publisher.
 2. Verify integrity against the release `SHA256SUMS-*.txt` (or the hash listed in release notes):
 
 ```powershell
-Get-FileHash .\CodeRadioTray-0.4.3-win64-setup.exe -Algorithm SHA256
+Get-FileHash .\CodeRadioTray-0.5.0-win64-setup.exe -Algorithm SHA256
 ```
 
 3. When SmartScreen shows **Windows protected your PC**:
@@ -158,7 +158,7 @@ Builds are **not signed or notarized**. First open after download from the web o
 2. Verify SHA256:
 
 ```bash
-shasum -a 256 CodeRadioTray-0.4.3-macos.dmg
+shasum -a 256 CodeRadioTray-0.5.0-macos.dmg
 ```
 
 3. **Preferred UI path:** in Finder, **Control-click** (right-click) the app → **Open** → confirm **Open** in the dialog. Do this once; later launches are remembered for that user.
@@ -176,7 +176,7 @@ xattr -dr com.apple.quarantine "/Applications/Code Radio Tray.app"
 
 ### Linux (best-effort)
 
-No packaged Linux binary in v0.3.x. Primary QA remains Windows + macOS. For source install,
+No packaged Linux binary in v0.5.x. Primary QA remains Windows + macOS. For source install,
 DE caveats, and a concrete **Ubuntu smoke checklist**, see
 [`docs/linux-best-effort.md`](docs/linux-best-effort.md).
 
@@ -202,7 +202,8 @@ pytest
 
 - `docs/considerations.md` — design decisions
 - `docs/linux-best-effort.md` — Linux caveats + Ubuntu smoke procedure
-- `docs/review-v0.1.md` / `docs/review-v0.2.md` / `docs/review-v0.3.md` — implementation reviews
+- `docs/review-v0.1.md` / `docs/review-v0.2.md` / `docs/review-v0.3.md` — archived implementation reviews
+- `docs/review-v0.5.md` — current **0.5.0** implementation and release-readiness review
 - `docs/smoke-sleep-network.md` — sleep / network reconnect smoke checklist (results blank until filled)
 
 ## License
