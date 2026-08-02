@@ -175,24 +175,46 @@ def _render_logo_pixmap(
     return canvas
 
 
-def _render_tray_pixmap(size: int, *, playing: bool, error: bool, ink: QColor) -> QPixmap:
+def _render_tray_pixmap(
+    size: int,
+    *,
+    playing: bool,
+    error: bool,
+    ink: QColor,
+    error_visible: bool = True,
+) -> QPixmap:
     square, height_fill = _tray_render_params()
     if error:
+        # Keep the paused/stopped brackets as the base so every state belongs
+        # to the same visual family. The tray controller blinks only the mark.
         pixmap = _render_logo_pixmap(
             size,
-            ink=QColor("#e53935"),
+            brackets_only=True,
+            ink=ink,
             rectangular=not square,
             square=square,
             height_fill=height_fill,
         )
-        painter = QPainter(pixmap)
-        font = painter.font()
-        font.setBold(True)
-        font.setPixelSize(max(8, int(size * 0.42)))
-        painter.setFont(font)
-        painter.setPen(QColor("#ffffff"))
-        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "!")
-        painter.end()
+        if error_visible:
+            # Draw the exclamation mark geometrically instead of relying on a
+            # system font, keeping it bold and legible at 16px on every OS.
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(ink)
+            mark_width = max(2.0, size * 0.13)
+            center_x = pixmap.width() / 2
+            stem_top = size * 0.18
+            stem_height = size * 0.43
+            radius = mark_width / 2
+            painter.drawRoundedRect(
+                QRectF(center_x - mark_width / 2, stem_top, mark_width, stem_height),
+                radius,
+                radius,
+            )
+            dot_size = mark_width
+            painter.drawEllipse(QRectF(center_x - dot_size / 2, size * 0.72, dot_size, dot_size))
+            painter.end()
         return pixmap
 
     # Playing shows the supplied logo unchanged. Paused/stopped removes only
@@ -294,12 +316,22 @@ def _render_app_pixmap(size: int) -> QPixmap:
     return canvas
 
 
-def make_tray_icon(*, playing: bool = False, error: bool = False) -> QIcon:
+def make_tray_icon(
+    *, playing: bool = False, error: bool = False, error_visible: bool = True
+) -> QIcon:
     ink, is_mask = _platform_ink()
     icon = QIcon()
     for size in TRAY_ICON_SIZES:
-        icon.addPixmap(_render_tray_pixmap(size, playing=playing, error=error, ink=ink))
-    if is_mask and not error:
+        icon.addPixmap(
+            _render_tray_pixmap(
+                size,
+                playing=playing,
+                error=error,
+                ink=ink,
+                error_visible=error_visible,
+            )
+        )
+    if is_mask:
         icon.setIsMask(True)
     return icon
 

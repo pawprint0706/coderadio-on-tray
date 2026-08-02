@@ -6,7 +6,7 @@ Unofficial [freeCodeCamp Code Radio](https://coderadio.freecodecamp.org/) player
 
 | | |
 |--|--|
-| Version | 0.3.0 |
+| Version | 0.4.3 |
 | Platforms | Windows / macOS (primary), Linux best-effort |
 | Stack | Python 3.11+, PySide6, mpv (JSON IPC) |
 
@@ -119,7 +119,7 @@ Edge/Chrome download warnings are expected for a new/unsigned publisher.
 2. Verify integrity against the release `SHA256SUMS-*.txt` (or the hash listed in release notes):
 
 ```powershell
-Get-FileHash .\CodeRadioTray-0.3.0-win64-setup.exe -Algorithm SHA256
+Get-FileHash .\CodeRadioTray-0.4.3-win64-setup.exe -Algorithm SHA256
 ```
 
 3. When SmartScreen shows **Windows protected your PC**:
@@ -149,7 +149,7 @@ Builds are **not signed or notarized**. First open after download from the web o
 2. Verify SHA256:
 
 ```bash
-shasum -a 256 CodeRadioTray-0.3.0-macos.dmg
+shasum -a 256 CodeRadioTray-0.4.3-macos.dmg
 ```
 
 3. **Preferred UI path:** in Finder, **Control-click** (right-click) the app → **Open** → confirm **Open** in the dialog. Do this once; later launches are remembered for that user.

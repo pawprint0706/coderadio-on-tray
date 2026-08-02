@@ -24,6 +24,7 @@ def test_tray_icon_is_mask_on_template_platform(monkeypatch, qapp):
     _force_platform_ink(monkeypatch, is_mask=True)
     icon = make_tray_icon(playing=False)
     assert icon.isMask() is True
+    assert make_tray_icon(error=True).isMask() is True
 
 
 def test_tray_icon_not_mask_on_colorink_platform(monkeypatch, qapp):
@@ -87,6 +88,41 @@ def _center_alpha_count(pixmap) -> int:
     return sum(
         image.pixelColor(x, y).alpha() for y in range(image.height()) for x in range(left, right)
     )
+
+
+def test_error_icon_uses_paused_brackets_and_monochrome_exclamation(qapp):
+    ink = QColor("#ffffff")
+    pixmap = _render_tray_pixmap(128, playing=False, error=True, ink=ink)
+    image = pixmap.toImage()
+
+    assert _center_alpha_count(pixmap) > 0
+    assert any(
+        image.pixelColor(x, y).alpha() > 0
+        for y in range(image.height())
+        for x in range(image.width() // 4)
+    )
+    visible_colors = [
+        image.pixelColor(x, y)
+        for y in range(image.height())
+        for x in range(image.width())
+        if image.pixelColor(x, y).alpha() > 20
+    ]
+    assert visible_colors
+    assert all(color.red() == color.green() == color.blue() for color in visible_colors)
+
+
+def test_error_blink_off_frame_matches_paused_icon(qapp):
+    ink = QColor("#ffffff")
+    hidden = _render_tray_pixmap(
+        128,
+        playing=False,
+        error=True,
+        ink=ink,
+        error_visible=False,
+    ).toImage()
+    paused = _render_tray_pixmap(128, playing=False, error=False, ink=ink).toImage()
+
+    assert hidden == paused
 
 
 def test_playing_icon_keeps_center_campfire(qapp):

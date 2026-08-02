@@ -40,6 +40,11 @@ class CodeRadioApp(QObject):
         self._stream_url = ""
         self._error: str | None = None
         self._auto_started = False
+        # Keep the user's playback intent separate from mpv's transient state.
+        # A paused live stream can eventually end at the server/cache layer;
+        # that must not turn a user pause into an automatic reconnect/play.
+        self._playback_requested = False
+        self._user_paused = False
         self._reconnect_count = 0
         self._reconnect_timer: QTimer | None = None
         self._pending_bitrate: str | None = None
@@ -125,10 +130,14 @@ class CodeRadioApp(QObject):
 
         if not self._auto_started and self._stream_url:
             self._auto_started = True
+            self._playback_requested = True
             self._start_playback()
 
     @Slot(str)
     def _on_metadata_failed(self, message: str) -> None:
+        if self._user_paused:
+            logger.info("metadata fetch failed while paused: %s", message)
+            return
         self._error = message
         self._update_ui()
 
@@ -138,10 +147,15 @@ class CodeRadioApp(QObject):
 
     @Slot()
     def _on_stream_ended(self) -> None:
+        if not self._playback_requested:
+            logger.info("stream ended while playback was not requested; staying paused")
+            return
         logger.info("stream ended, scheduling reconnect")
         self._schedule_reconnect()
 
     def _schedule_reconnect(self) -> None:
+        if not self._playback_requested:
+            return
         if self._reconnect_timer and self._reconnect_timer.isActive():
             return
         delay = min(2**self._reconnect_count, 30)
@@ -162,6 +176,8 @@ class CodeRadioApp(QObject):
 
     def _do_reconnect(self) -> None:
         self._reconnect_timer = None
+        if not self._playback_requested:
+            return
         if self._stream_url:
             self._start_playback()
         else:
@@ -184,18 +200,24 @@ class CodeRadioApp(QObject):
                 sig.emit()
 
     def toggle_playback(self) -> None:
-        if self._error and self._error.startswith("Reconnecting"):
-            return
         try:
-            if self._player_worker.is_playing():
-                self._queue_player_cmd("pause")
-            elif self._player_worker.is_paused():
-                if self._pending_bitrate:
-                    self._pending_bitrate = None
-                    self._start_playback()
-                else:
-                    self._queue_player_cmd("resume")
+            if self._playback_requested:
+                # For a live stream, pause means closing the current connection.
+                # Resuming later starts at the live edge and cannot inherit a
+                # server/cache timeout from an indefinitely paused connection.
+                self._playback_requested = False
+                self._user_paused = True
+                self._cancel_reconnect()
+                self._error = None
+                self._queue_player_cmd("stop")
+            elif self._user_paused:
+                self._playback_requested = True
+                self._user_paused = False
+                self._pending_bitrate = None
+                self._start_playback()
             elif self._stream_url:
+                self._playback_requested = True
+                self._user_paused = False
                 self._start_playback()
             else:
                 self._error = "No stream URL yet"
@@ -206,6 +228,8 @@ class CodeRadioApp(QObject):
         self._update_ui()
 
     def _start_playback(self) -> None:
+        if not self._playback_requested:
+            return
         if not self._stream_url:
             self._error = "No stream URL yet"
             self.refresh_metadata()
@@ -228,13 +252,11 @@ class CodeRadioApp(QObject):
     def _on_bitrate(self, bitrate: str) -> None:
         if bitrate == self._config.bitrate:
             return
-        was_playing = self._player_worker.is_playing() or self._player_worker.is_paused()
         self._config.bitrate = bitrate
         if self._snapshot:
             self._stream_url = self._snapshot.stream_for_bitrate(bitrate)
         save_config(self._config)
-        if was_playing and self._stream_url:
-            # Paused bitrate switch: load the new URL instead of resume-old.
+        if self._playback_requested and self._stream_url:
             self._pending_bitrate = None
             self._start_playback()
         elif self._stream_url:
@@ -252,7 +274,7 @@ class CodeRadioApp(QObject):
 
     def _update_ui(self) -> None:
         playing = self._player_worker.is_playing()
-        paused = self._player_worker.is_paused()
+        paused = self._user_paused
         track = self._track.display
         self._popup.set_track_text(track)
         if self._error:
@@ -264,7 +286,9 @@ class CodeRadioApp(QObject):
         else:
             status = "Stopped"
         self._popup.set_status(status)
-        self._popup.set_playing(playing)
+        # During a reconnect the requested action is still "playing", so the
+        # button remains Pause and can be used to cancel the retry loop.
+        self._popup.set_playing(self._playback_requested)
         self._tray.set_playing(playing, error=bool(self._error))
         tip = f"Code Radio\n{track}"
         if self._error:

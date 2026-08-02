@@ -25,6 +25,10 @@ class TrayController(QObject):
         self._on_hint_shown = on_hint_shown
         self._playing = False
         self._error = False
+        self._error_blink_visible = True
+        self._error_blink_timer = QTimer(self)
+        self._error_blink_timer.setInterval(1000)
+        self._error_blink_timer.timeout.connect(self._toggle_error_blink)
 
         if sys.platform == "darwin":
             pass
@@ -38,17 +42,32 @@ class TrayController(QObject):
             QGuiApplication.styleHints().colorSchemeChanged.connect(self._on_theme_changed)
 
     def _on_theme_changed(self, _scheme: object = None) -> None:
-        self.tray.setIcon(make_tray_icon(playing=self._playing, error=self._error))
+        self._refresh_icon()
 
     def _check_win_taskbar_theme(self) -> None:
         current = _win_taskbar_is_light()
         if current == self._win_taskbar_light:
             return
         self._win_taskbar_light = current
-        self.tray.setIcon(make_tray_icon(playing=self._playing, error=self._error))
+        self._refresh_icon()
+
+    def _refresh_icon(self) -> None:
+        self.tray.setIcon(
+            make_tray_icon(
+                playing=self._playing,
+                error=self._error,
+                error_visible=self._error_blink_visible,
+            )
+        )
+
+    def _toggle_error_blink(self) -> None:
+        if not self._error:
+            return
+        self._error_blink_visible = not self._error_blink_visible
+        self._refresh_icon()
 
     def show(self) -> None:
-        self.tray.setIcon(make_tray_icon(playing=self._playing, error=self._error))
+        self._refresh_icon()
         self.tray.show()
         if not self.tray.isVisible():
             logger.error("system tray icon is not visible after show()")
@@ -65,6 +84,7 @@ class TrayController(QObject):
                 self._on_hint_shown()
 
     def hide(self) -> None:
+        self._error_blink_timer.stop()
         self.tray.hide()
 
     def is_visible(self) -> bool:
@@ -72,8 +92,17 @@ class TrayController(QObject):
 
     def set_playing(self, playing: bool, *, error: bool = False) -> None:
         self._playing = playing
+        error_changed = error != self._error
         self._error = error
-        self.tray.setIcon(make_tray_icon(playing=playing, error=error))
+        if error:
+            if error_changed:
+                self._error_blink_visible = True
+            if not self._error_blink_timer.isActive():
+                self._error_blink_timer.start()
+        else:
+            self._error_blink_timer.stop()
+            self._error_blink_visible = False
+        self._refresh_icon()
         self.popup.set_playing(playing)
 
     def set_tooltip(self, text: str) -> None:
