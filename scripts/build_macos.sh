@@ -28,6 +28,12 @@ fi
 brew list "$MPV_FORMULA" >/dev/null 2>&1 || brew install "$MPV_FORMULA"
 MPV_ACTUAL=$(brew list --versions "$MPV_FORMULA" | awk '{print $2}')
 if [[ "$MPV_ACTUAL" != "$MPV_EXPECTED" ]]; then
+  echo "Installed mpv $MPV_ACTUAL does not match pinned $MPV_EXPECTED; refreshing Homebrew ..."
+  brew update
+  brew upgrade "$MPV_FORMULA"
+  MPV_ACTUAL=$(brew list --versions "$MPV_FORMULA" | awk '{print $2}')
+fi
+if [[ "$MPV_ACTUAL" != "$MPV_EXPECTED" ]]; then
   echo "Pinned mpv formula mismatch: expected $MPV_EXPECTED, installed $MPV_ACTUAL." >&2
   echo "Update packaging/mpv-versions.json deliberately before building." >&2
   exit 1
