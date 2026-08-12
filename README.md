@@ -6,7 +6,7 @@ Unofficial [freeCodeCamp Code Radio](https://coderadio.freecodecamp.org/) player
 
 | | |
 |--|--|
-| Version | 0.5.0 |
+| Version | 0.5.1 |
 | Platforms | Windows / macOS (primary), Linux best-effort |
 | Stack | Python 3.11+, PySide6, mpv (JSON IPC) |
 
@@ -75,7 +75,7 @@ taskkill /IM pythonw.exe /F
 
 The popup shows album artwork and the current listener count when available. Its Settings page
 controls login startup, startup playback, GitHub release notifications, artwork/listener
-visibility, and whether tray/menu-bar left click toggles playback or opens the popup.
+visibility, and whether tray/menu-bar left click toggles playback or opens/closes the popup.
 
 By default, playback starts after the first successful metadata fetch. Only one instance is allowed.
 
@@ -128,7 +128,7 @@ Edge/Chrome download warnings are expected for a new/unsigned publisher.
 2. Verify integrity against the release `SHA256SUMS-*.txt` (or the hash listed in release notes):
 
 ```powershell
-Get-FileHash .\CodeRadioTray-0.5.0-win64-setup.exe -Algorithm SHA256
+Get-FileHash .\CodeRadioTray-0.5.1-win64-setup.exe -Algorithm SHA256
 ```
 
 3. When SmartScreen shows **Windows protected your PC**:
@@ -158,7 +158,7 @@ Builds are **not signed or notarized**. First open after download from the web o
 2. Verify SHA256:
 
 ```bash
-shasum -a 256 CodeRadioTray-0.5.0-macos.dmg
+shasum -a 256 CodeRadioTray-0.5.1-macos.dmg
 ```
 
 3. **Preferred UI path:** in Finder, **Control-click** (right-click) the app → **Open** → confirm **Open** in the dialog. Do this once; later launches are remembered for that user.
