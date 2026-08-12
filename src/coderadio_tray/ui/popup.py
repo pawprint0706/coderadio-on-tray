@@ -157,7 +157,7 @@ class TrayPopup(QWidget):
 
         self._tray_click_action = QComboBox()
         self._tray_click_action.addItem("Play / Pause", "toggle")
-        self._tray_click_action.addItem("Open popup", "popup")
+        self._tray_click_action.addItem("Open / close popup", "popup")
         self._tray_click_action.currentIndexChanged.connect(self._emit_settings)
 
         self._settings_status = QLabel("")

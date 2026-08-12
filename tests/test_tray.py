@@ -10,11 +10,21 @@ class _PopupStub:
     def __init__(self) -> None:
         self.playing = False
         self.popup_positions = []
+        self.visible = False
+        self.hidden_count = 0
 
     def set_playing(self, playing: bool) -> None:
         self.playing = playing
 
+    def isVisible(self) -> bool:  # noqa: N802
+        return self.visible
+
+    def hide(self) -> None:
+        self.visible = False
+        self.hidden_count += 1
+
     def popup_at(self, position) -> None:
+        self.visible = True
         self.popup_positions.append(position)
 
 
@@ -55,6 +65,22 @@ def test_left_click_can_open_popup(monkeypatch, qapp):
 
     assert len(popup.popup_positions) == 1
     assert toggles == []
+
+
+def test_left_click_toggles_popup_open_and_closed(monkeypatch, qapp):
+    monkeypatch.setattr(tray_module, "make_tray_icon", lambda **_kwargs: QIcon())
+    popup = _PopupStub()
+    controller = TrayController(popup)
+    controller.set_left_click_action("popup")
+
+    controller._on_activated(controller.tray.ActivationReason.Trigger)
+    assert len(popup.popup_positions) == 1
+    assert popup.isVisible()
+
+    controller._on_activated(controller.tray.ActivationReason.Trigger)
+    assert len(popup.popup_positions) == 1
+    assert not popup.isVisible()
+    assert popup.hidden_count == 1
 
 
 def test_notification_click_runs_handler(monkeypatch, qapp):

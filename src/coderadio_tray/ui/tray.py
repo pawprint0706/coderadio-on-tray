@@ -143,7 +143,10 @@ class TrayController(QObject):
             self.popup.popup_at(self._popup_anchor())
         elif reason == QSystemTrayIcon.ActivationReason.Trigger:
             if self._left_click_action == "popup":
-                self.popup.popup_at(self._popup_anchor())
+                if self.popup.isVisible():
+                    self.popup.hide()
+                else:
+                    self.popup.popup_at(self._popup_anchor())
             else:
                 self._left_click_handler()
 
