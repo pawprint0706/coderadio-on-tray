@@ -152,6 +152,37 @@ def test_popup_escape_hides(qapp):
     assert not popup.isVisible()
 
 
+def test_popup_outside_click_hide_leaves_auto_close_tail(qapp):
+    popup = TrayPopup()
+    popup.popup_at(QPoint(200, 200))
+    popup.hide()
+    try:
+        assert popup.consume_auto_close_tail()
+    finally:
+        popup.hide()
+
+
+def test_popup_toggle_hide_clears_auto_close_tail(qapp):
+    popup = TrayPopup()
+    popup.popup_at(QPoint(200, 200))
+    popup.hide_for_toggle()
+    try:
+        assert not popup.consume_auto_close_tail()
+    finally:
+        popup.hide()
+
+
+def test_popup_stale_auto_close_tail_is_not_consumed(qapp):
+    popup = TrayPopup()
+    popup.popup_at(QPoint(200, 200))
+    popup.hide()
+    popup._auto_closed_at = 0.0
+    try:
+        assert not popup.consume_auto_close_tail()
+    finally:
+        popup.hide()
+
+
 def test_popup_window_type_matches_platform(qapp):
     popup = TrayPopup()
     flags = int(popup.windowFlags())

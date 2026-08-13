@@ -25,6 +25,12 @@ from coderadio_tray.config import AppConfig
 
 # Non-macOS Qt.Popup windows need to swallow the tray interaction briefly.
 OUTSIDE_CLICK_GUARD_MS = 300
+# On Windows/Linux the popup grabs the mouse, so a tray click's press auto-
+# closes it (Qt.Popup) and the same click's release then reaches the tray and
+# emits activated(Trigger). If that tail activation reopened the popup, the
+# toggle could never close it. Treat activations inside this window after an
+# outside-click hide as the tail of that same click instead of a new open.
+AUTO_CLOSE_TAIL_MS = 500
 PANEL_RADIUS = 12
 SHADOW_MARGIN = 10
 POPUP_WIDTH = 300
@@ -55,6 +61,8 @@ class TrayPopup(QWidget):
         self._mouse_monitor = None
         self._last_anchor = None
         self._loading_settings = False
+        self._auto_closed_at = 0.0
+        self._programmatic_hide = False
         self._album_art_enabled = True
         self._album_art_has_image = False
         if sys.platform == "darwin":
@@ -431,6 +439,29 @@ class TrayPopup(QWidget):
                 y = geo.top() - SHADOW_MARGIN
             self.move(x, y)
 
+    def hide_for_toggle(self) -> None:
+        """Hide because the tray left-click toggle asked us to.
+
+        Marks the hide as programmatic so the same click's activation is not
+        mistaken for the tail of an outside-click auto-close.
+        """
+        self._programmatic_hide = True
+        self.hide()
+
+    def consume_auto_close_tail(self) -> bool:
+        """True if the current tray activation is the tail of the same outside
+        click that just auto-closed this popup.
+
+        On Windows/Linux the Qt.Popup grabs the mouse, so clicking the tray
+        icon while open auto-closes the popup on the press; the same click's
+        release then reaches the tray and emits activated(Trigger). Without
+        this guard the toggle would reopen the popup forever.
+        """
+        if time.monotonic() - self._auto_closed_at < AUTO_CLOSE_TAIL_MS / 1000.0:
+            self._auto_closed_at = 0.0
+            return True
+        return False
+
     def _arm_outside_click_guard(self) -> None:
         if sys.platform == "darwin":
             app = QApplication.instance()
@@ -503,5 +534,10 @@ class TrayPopup(QWidget):
         super().keyPressEvent(event)
 
     def hideEvent(self, event) -> None:  # noqa: N802
+        if self._programmatic_hide:
+            self._programmatic_hide = False
+            self._auto_closed_at = 0.0
+        else:
+            self._auto_closed_at = time.monotonic()
         self._disarm_outside_click_guard()
         super().hideEvent(event)
