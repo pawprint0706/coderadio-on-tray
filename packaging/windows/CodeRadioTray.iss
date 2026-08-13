@@ -2,7 +2,7 @@
 ; Compile via scripts\build_windows.ps1 (passes /DMyAppVersion=…)
 
 #ifndef MyAppVersion
-  #define MyAppVersion "0.5.1"
+  #define MyAppVersion "0.5.2"
 #endif
 
 #define MyAppName "Code Radio Tray"
